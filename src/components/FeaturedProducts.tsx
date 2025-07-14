@@ -39,9 +39,6 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return loadFeaturedProducts();
       }
-        console.error('❌ Erro ao carregar produtos:', error);
-        return;
-      }
 
       console.log('✅ Produtos carregados:', data?.length || 0);
       
