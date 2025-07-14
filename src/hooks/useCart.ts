@@ -214,63 +214,49 @@ export function useCart() {
 
     try {
       setIsLoading(true);
-      console.log('💳 Iniciando checkout com', items.length, 'itens');
+      console.log('💳 Iniciando checkout Stripe com', items.length, 'itens');
 
-      // Criar transações para cada item
-      const transactions = [];
-      
-      for (const item of items) {
-        console.log('💰 Criando transação para:', item.product.title);
-        
-        const { data: transaction, error } = await supabase
-          .from('transactions')
-          .insert([{
-            buyer_id: user.id,
-            seller_id: item.product.seller.id,
-            product_id: item.product.id,
-            amount: item.product.price * item.quantity,
-            status: 'escrow'
-          }])
-          .select()
-          .single();
+      // Prepare cart items for Stripe checkout
+      const cartItems = items.map(item => ({
+        id: item.product.id,
+        seller_id: item.product.seller.id,
+        title: item.product.title,
+        description: item.product.description,
+        price: item.product.price,
+        quantity: item.quantity,
+        images: item.product.images,
+        game: item.product.game,
+        category: item.product.category
+      }));
 
-        if (error) {
-          console.error('❌ Erro ao criar transação:', error);
-          throw error;
-        }
-        
-        transactions.push(transaction);
-        console.log('✅ Transação criada:', transaction.id);
+      // Create Stripe checkout session
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          items: cartItems,
+          buyerId: user.id,
+          successUrl: `${window.location.origin}/checkout-success`,
+          cancelUrl: `${window.location.origin}/checkout-cancel`
+        }),
+      });
 
-        // Criar notificação para o vendedor
-        await supabase
-          .from('notifications')
-          .insert([{
-            user_id: item.product.seller.id,
-            content: `Nova venda! Produto "${item.product.title}" vendido por R$ ${(item.product.price * item.quantity).toFixed(2)}`,
-            type: 'sale',
-            is_read: false
-          }]);
+      const session = await response.json();
 
-        // Criar notificação para o comprador
-        await supabase
-          .from('notifications')
-          .insert([{
-            user_id: user.id,
-            content: `Compra realizada! Produto "${item.product.title}" adquirido por R$ ${(item.product.price * item.quantity).toFixed(2)}`,
-            type: 'purchase',
-            is_read: false
-          }]);
+      if (session.error) {
+        throw new Error(session.error);
       }
 
-      // Limpar carrinho após sucesso
-      await clearCart();
+      // Redirect to Stripe Checkout
+      window.location.href = session.url;
 
-      console.log('🎉 Checkout realizado com sucesso:', transactions.length, 'transações');
       return true;
     } catch (error) {
       console.error('❌ Erro no checkout:', error);
-      alert('Erro ao finalizar compra. Tente novamente.');
+      alert(`Erro ao processar pagamento: ${error.message}`);
       return false;
     } finally {
       setIsLoading(false);

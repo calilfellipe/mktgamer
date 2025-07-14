@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Stripe and Supabase
+    // Initialize services
     const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')
     const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -46,7 +46,7 @@ serve(async (req) => {
       })
     }
 
-    console.log('Webhook event type:', event.type)
+    console.log('Processing webhook event:', event.type)
 
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -65,143 +65,32 @@ serve(async (req) => {
           break
         }
 
+        const totalAmount = (session.amount_total || 0) / 100 // Convert from cents
+
         // Handle single product purchase
         if (productId && sellerId) {
-          const amount = (session.amount_total || 0) / 100 // Convert from cents
-          
-          const { data: transaction, error: transactionError } = await supabase
-            .from('transactions')
-            .insert({
-              buyer_id: buyerId,
-              seller_id: sellerId,
-              product_id: productId,
-              amount: amount,
-              status: 'escrow',
-              stripe_payment_intent_id: session.payment_intent,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single()
-
-          if (transactionError) {
-            console.error('Error creating transaction:', transactionError)
-            return new Response('Error creating transaction', { 
-              status: 500,
-              headers: corsHeaders 
-            })
-          }
-
-          console.log('Transaction created:', transaction.id)
-
-          // Create notifications
-          await Promise.all([
-            // Notify seller
-            supabase.from('notifications').insert({
-              user_id: sellerId,
-              content: `Nova venda! Produto vendido por R$ ${amount.toFixed(2)}. Aguardando entrega.`,
-              type: 'sale',
-              is_read: false,
-              action_url: `/transaction/${transaction.id}`
-            }),
-            
-            // Notify buyer
-            supabase.from('notifications').insert({
-              user_id: buyerId,
-              content: `Compra realizada! Pagamento em escrow. Aguarde a entrega do produto.`,
-              type: 'purchase',
-              is_read: false,
-              action_url: `/transaction/${transaction.id}`
-            })
-          ])
-
-          // Create chat room for buyer and seller
-          await supabase.from('chats').insert({
-            buyer_id: buyerId,
-            seller_id: sellerId,
-            product_id: productId,
-            messages: JSON.stringify([{
-              id: crypto.randomUUID(),
-              sender_id: 'system',
-              content: 'Compra realizada! Use este chat para coordenar a entrega do produto.',
-              type: 'system',
-              timestamp: new Date().toISOString()
-            }])
+          await processSingleProductPurchase({
+            supabase,
+            buyerId,
+            sellerId,
+            productId,
+            totalAmount,
+            paymentId: session.payment_intent as string,
+            sessionId: session.id
+          })
+        }
+        // Handle cart purchase (multiple items)
+        else if (cartItems) {
+          await processCartPurchase({
+            supabase,
+            buyerId,
+            cartItems,
+            totalAmount,
+            paymentId: session.payment_intent as string,
+            sessionId: session.id
           })
         }
 
-        // Handle cart purchase (multiple items)
-        if (cartItems) {
-          try {
-            const items = JSON.parse(cartItems)
-            const totalAmount = (session.amount_total || 0) / 100
-
-            for (const item of items) {
-              const itemAmount = item.price * item.quantity
-              
-              const { data: transaction, error: transactionError } = await supabase
-                .from('transactions')
-                .insert({
-                  buyer_id: buyerId,
-                  seller_id: item.seller_id,
-                  product_id: item.product_id,
-                  amount: itemAmount,
-                  status: 'escrow',
-                  stripe_payment_intent_id: session.payment_intent,
-                  created_at: new Date().toISOString()
-                })
-                .select()
-                .single()
-
-              if (transactionError) {
-                console.error('Error creating transaction for item:', item.product_id, transactionError)
-                continue
-              }
-
-              // Create notifications for each transaction
-              await Promise.all([
-                supabase.from('notifications').insert({
-                  user_id: item.seller_id,
-                  content: `Nova venda! Produto "${item.title}" vendido por R$ ${itemAmount.toFixed(2)}`,
-                  type: 'sale',
-                  is_read: false,
-                  action_url: `/transaction/${transaction.id}`
-                }),
-                
-                supabase.from('notifications').insert({
-                  user_id: buyerId,
-                  content: `Compra realizada! Produto "${item.title}" em escrow.`,
-                  type: 'purchase',
-                  is_read: false,
-                  action_url: `/transaction/${transaction.id}`
-                })
-              ])
-
-              // Create chat room
-              await supabase.from('chats').insert({
-                buyer_id: buyerId,
-                seller_id: item.seller_id,
-                product_id: item.product_id,
-                messages: JSON.stringify([{
-                  id: crypto.randomUUID(),
-                  sender_id: 'system',
-                  content: `Compra realizada para "${item.title}"! Use este chat para coordenar a entrega.`,
-                  type: 'system',
-                  timestamp: new Date().toISOString()
-                }])
-              })
-            }
-
-            // Clear buyer's cart after successful purchase
-            await supabase
-              .from('cart_items')
-              .delete()
-              .eq('user_id', buyerId)
-
-            console.log(`Created ${items.length} transactions for cart purchase`)
-          } catch (parseError) {
-            console.error('Error parsing cart items:', parseError)
-          }
-        }
         break
       }
 
@@ -210,14 +99,14 @@ serve(async (req) => {
         
         console.log('Payment intent succeeded:', paymentIntent.id)
         
-        // Update transaction status if it exists
+        // Update transaction status to escrow
         const { error: updateError } = await supabase
           .from('transactions')
           .update({ 
             status: 'escrow',
             updated_at: new Date().toISOString()
           })
-          .eq('stripe_payment_intent_id', paymentIntent.id)
+          .eq('payment_id', paymentIntent.id)
 
         if (updateError) {
           console.error('Error updating transaction status:', updateError)
@@ -237,86 +126,10 @@ serve(async (req) => {
             status: 'refunded',
             updated_at: new Date().toISOString()
           })
-          .eq('stripe_payment_intent_id', paymentIntent.id)
+          .eq('payment_id', paymentIntent.id)
 
         if (updateError) {
           console.error('Error updating failed transaction:', updateError)
-        }
-        break
-      }
-
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated': {
-        const subscription = event.data.object as Stripe.Subscription
-        
-        console.log('Subscription event:', event.type, subscription.id)
-        
-        // Handle subscription updates if needed
-        if (subscription.metadata?.user_id && subscription.metadata?.plan_id) {
-          const { error: userUpdateError } = await supabase
-            .from('users')
-            .update({ 
-              role: subscription.metadata.plan_id,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', subscription.metadata.user_id)
-
-          if (userUpdateError) {
-            console.error('Error updating user plan:', userUpdateError)
-          } else {
-            // Create notification
-            await supabase.from('notifications').insert({
-              user_id: subscription.metadata.user_id,
-              content: `Plano ${subscription.metadata.plan_id} ativado com sucesso!`,
-              type: 'system',
-              is_read: false
-            })
-          }
-        }
-        break
-      }
-
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object as Stripe.Subscription
-        
-        console.log('Subscription cancelled:', subscription.id)
-        
-        // Downgrade user to free plan
-        if (subscription.metadata?.user_id) {
-          const { error: userUpdateError } = await supabase
-            .from('users')
-            .update({ 
-              role: 'user',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', subscription.metadata.user_id)
-
-          if (userUpdateError) {
-            console.error('Error downgrading user plan:', userUpdateError)
-          } else {
-            // Create notification
-            await supabase.from('notifications').insert({
-              user_id: subscription.metadata.user_id,
-              content: 'Sua assinatura foi cancelada. Você foi movido para o plano gratuito.',
-              type: 'system',
-              is_read: false
-            })
-          }
-        }
-        break
-      }
-
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice
-        
-        console.log('Invoice payment failed:', invoice.id)
-        
-        // Handle failed subscription payment
-        if (invoice.subscription && invoice.customer_email) {
-          console.log('Subscription payment failed for:', invoice.customer_email)
-          
-          // You could send email notifications or create system notifications here
-          // For now, we'll just log it
         }
         break
       }
@@ -343,3 +156,227 @@ serve(async (req) => {
     )
   }
 })
+
+// Helper function to process single product purchase
+async function processSingleProductPurchase({
+  supabase,
+  buyerId,
+  sellerId,
+  productId,
+  totalAmount,
+  paymentId,
+  sessionId
+}: {
+  supabase: any
+  buyerId: string
+  sellerId: string
+  productId: string
+  totalAmount: number
+  paymentId: string
+  sessionId: string
+}) {
+  try {
+    // Get product details to calculate commission
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('commission_rate, title')
+      .eq('id', productId)
+      .single()
+
+    if (productError || !product) {
+      console.error('Error fetching product:', productError)
+      return
+    }
+
+    // Calculate platform fee and net amount for seller
+    const commissionRate = product.commission_rate || 15 // Default 15%
+    const fee = (totalAmount * commissionRate) / 100
+    const netAmount = totalAmount - fee
+
+    // Create transaction record
+    const { data: transaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        buyer_id: buyerId,
+        seller_id: sellerId,
+        product_id: productId,
+        amount: totalAmount,
+        fee: fee,
+        net_amount: netAmount,
+        status: 'escrow',
+        payment_id: paymentId,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (transactionError) {
+      console.error('Error creating transaction:', transactionError)
+      return
+    }
+
+    console.log('Transaction created:', transaction.id)
+
+    // Update product status to sold
+    await supabase
+      .from('products')
+      .update({ 
+        status: 'sold',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', productId)
+
+    // Create notifications
+    await Promise.all([
+      // Notify seller
+      supabase.from('notifications').insert({
+        user_id: sellerId,
+        content: `🎉 Nova venda! Produto "${product.title}" vendido por R$ ${totalAmount.toFixed(2)}. Valor em escrow: R$ ${netAmount.toFixed(2)} (após taxa de ${commissionRate}%).`,
+        type: 'sale',
+        is_read: false,
+        action_url: `/transaction/${transaction.id}`
+      }),
+      
+      // Notify buyer
+      supabase.from('notifications').insert({
+        user_id: buyerId,
+        content: `✅ Compra realizada! Produto "${product.title}" adquirido por R$ ${totalAmount.toFixed(2)}. Pagamento em escrow - aguarde a entrega.`,
+        type: 'purchase',
+        is_read: false,
+        action_url: `/transaction/${transaction.id}`
+      })
+    ])
+
+    // Create chat room for buyer and seller communication
+    await supabase.from('chats').insert({
+      buyer_id: buyerId,
+      seller_id: sellerId,
+      product_id: productId,
+      messages: JSON.stringify([{
+        id: crypto.randomUUID(),
+        sender_id: 'system',
+        content: `💬 Compra realizada para "${product.title}"! Use este chat para coordenar a entrega do produto. O pagamento está em escrow e será liberado após confirmação da entrega.`,
+        type: 'system',
+        timestamp: new Date().toISOString()
+      }])
+    })
+
+    console.log('Single product purchase processed successfully')
+  } catch (error) {
+    console.error('Error processing single product purchase:', error)
+  }
+}
+
+// Helper function to process cart purchase
+async function processCartPurchase({
+  supabase,
+  buyerId,
+  cartItems,
+  totalAmount,
+  paymentId,
+  sessionId
+}: {
+  supabase: any
+  buyerId: string
+  cartItems: string
+  totalAmount: number
+  paymentId: string
+  sessionId: string
+}) {
+  try {
+    const items = JSON.parse(cartItems)
+    
+    for (const item of items) {
+      // Get product details
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('commission_rate, title, seller_id')
+        .eq('id', item.product_id)
+        .single()
+
+      if (productError || !product) {
+        console.error('Error fetching product for cart item:', item.product_id, productError)
+        continue
+      }
+
+      const itemAmount = item.price * item.quantity
+      const commissionRate = product.commission_rate || 15
+      const fee = (itemAmount * commissionRate) / 100
+      const netAmount = itemAmount - fee
+
+      // Create transaction for each item
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          buyer_id: buyerId,
+          seller_id: product.seller_id,
+          product_id: item.product_id,
+          amount: itemAmount,
+          fee: fee,
+          net_amount: netAmount,
+          status: 'escrow',
+          payment_id: paymentId,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (transactionError) {
+        console.error('Error creating transaction for cart item:', item.product_id, transactionError)
+        continue
+      }
+
+      // Update product status
+      await supabase
+        .from('products')
+        .update({ 
+          status: 'sold',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.product_id)
+
+      // Create notifications for each transaction
+      await Promise.all([
+        supabase.from('notifications').insert({
+          user_id: product.seller_id,
+          content: `🎉 Nova venda! Produto "${product.title}" vendido por R$ ${itemAmount.toFixed(2)}. Valor em escrow: R$ ${netAmount.toFixed(2)}.`,
+          type: 'sale',
+          is_read: false,
+          action_url: `/transaction/${transaction.id}`
+        }),
+        
+        supabase.from('notifications').insert({
+          user_id: buyerId,
+          content: `✅ Produto "${product.title}" adquirido por R$ ${itemAmount.toFixed(2)}. Pagamento em escrow.`,
+          type: 'purchase',
+          is_read: false,
+          action_url: `/transaction/${transaction.id}`
+        })
+      ])
+
+      // Create chat room for each seller
+      await supabase.from('chats').insert({
+        buyer_id: buyerId,
+        seller_id: product.seller_id,
+        product_id: item.product_id,
+        messages: JSON.stringify([{
+          id: crypto.randomUUID(),
+          sender_id: 'system',
+          content: `💬 Compra realizada para "${product.title}"! Coordene a entrega através deste chat.`,
+          type: 'system',
+          timestamp: new Date().toISOString()
+        }])
+      })
+    }
+
+    // Clear buyer's cart after successful purchase
+    await supabase
+      .from('cart_items')
+      .delete()
+      .eq('user_id', buyerId)
+
+    console.log(`Cart purchase processed: ${items.length} items`)
+  } catch (error) {
+    console.error('Error processing cart purchase:', error)
+  }
+}
