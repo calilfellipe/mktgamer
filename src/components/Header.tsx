@@ -114,19 +114,31 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
                 <Gamepad2 className="w-4 h-4" />
                 <span>Início</span>
               </button>
-              <button onClick={() => handleNavClick('accounts')} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
+              <button onClick={() => {
+                setSelectedCategory('account');
+                handleNavClick('products');
+              }} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
                 <User className="w-4 h-4" />
                 <span>Contas</span>
               </button>
-              <button onClick={() => handleNavClick('skins')} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
+              <button onClick={() => {
+                setSelectedCategory('skin');
+                handleNavClick('products');
+              }} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
                 <Sparkles className="w-4 h-4" />
                 <span>Skins</span>
               </button>
-              <button onClick={() => handleNavClick('giftcards')} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
+              <button onClick={() => {
+                setSelectedCategory('giftcard');
+                handleNavClick('products');
+              }} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
                 <Gift className="w-4 h-4" />
                 <span>Gift Cards</span>
               </button>
-              <button onClick={() => handleNavClick('services')} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
+              <button onClick={() => {
+                setSelectedCategory('service');
+                handleNavClick('products');
+              }} className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1">
                 <Zap className="w-4 h-4" />
                 <span>Serviços</span>
               </button>

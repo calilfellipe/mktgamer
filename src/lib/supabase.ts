@@ -18,6 +18,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     headers: {
       'x-client-info': 'gg-sync-market'
     }
+  },
+  // Add retry logic for better reliability
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 });
 

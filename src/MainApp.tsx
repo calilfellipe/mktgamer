@@ -52,10 +52,6 @@ export function MainApp() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'accounts':
-      case 'skins':
-      case 'giftcards':
-      case 'services':
       case 'products':
         return <ProductsPage onAddToCart={addToCart} />;
       case 'admin':

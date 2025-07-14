@@ -19,9 +19,11 @@ import { Badge } from './ui/Badge';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { games } from '../data/mockData';
+import { useApp } from '../contexts/AppContext';
 
 export function CreateProductForm() {
   const { user } = useAuth();
+  const { refreshProducts, setCurrentPage } = useApp();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreview, setImagePreview] = useState<string[]>([]);
@@ -188,6 +190,11 @@ export function CreateProductForm() {
       console.log('✅ Produto criado com sucesso:', data);
       setMessage('✅ Anúncio criado com sucesso!');
       
+      // Refresh products list
+      if (refreshProducts) {
+        refreshProducts();
+      }
+      
       // Reset form
       setFormData({
         category: '',
@@ -203,6 +210,11 @@ export function CreateProductForm() {
       setSelectedImages([]);
       setImagePreview([]);
       setCurrentStep(1);
+      
+      // Redirect to products page to see the new listing
+      setTimeout(() => {
+        setCurrentPage('products');
+      }, 2000);
       
     } catch (error: any) {
       console.error('❌ Erro ao criar produto:', error);

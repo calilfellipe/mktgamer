@@ -92,45 +92,59 @@ export function useCart() {
       return;
     }
 
-    try {
-      console.log('➕ Adicionando produto ao carrinho:', product.title);
-      
-      // Verificar se o produto já está no carrinho
-      const { data: existingItem } = await supabase
-        .from('cart_items')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('product_id', product.id)
-        .single();
-
-      if (existingItem) {
-        // Atualizar quantidade
-        const { error } = await supabase
+    // Add retry logic for better reliability
+    const maxRetries = 3;
+    let retries = 0;
+    
+    while (retries < maxRetries) {
+      try {
+        console.log('➕ Adicionando produto ao carrinho:', product.title);
+        
+        // Verificar se o produto já está no carrinho
+        const { data: existingItem } = await supabase
           .from('cart_items')
-          .update({ quantity: existingItem.quantity + 1 })
-          .eq('id', existingItem.id);
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('product_id', product.id)
+          .single();
 
-        if (error) throw error;
-        console.log('✅ Quantidade atualizada no carrinho');
-      } else {
-        // Adicionar novo item
-        const { error } = await supabase
-          .from('cart_items')
-          .insert([{
-            user_id: user.id,
-            product_id: product.id,
-            quantity: 1
-          }]);
+        if (existingItem) {
+          // Atualizar quantidade
+          const { error } = await supabase
+            .from('cart_items')
+            .update({ quantity: existingItem.quantity + 1 })
+            .eq('id', existingItem.id);
 
-        if (error) throw error;
-        console.log('✅ Produto adicionado ao carrinho');
+          if (error) throw error;
+          console.log('✅ Quantidade atualizada no carrinho');
+        } else {
+          // Adicionar novo item
+          const { error } = await supabase
+            .from('cart_items')
+            .insert([{
+              user_id: user.id,
+              product_id: product.id,
+              quantity: 1
+            }]);
+
+          if (error) throw error;
+          console.log('✅ Produto adicionado ao carrinho');
+        }
+
+        // Recarregar carrinho
+        await loadCartFromSupabase();
+        break; // Success, exit retry loop
+      } catch (error) {
+        retries++;
+        console.error('❌ Erro ao adicionar ao carrinho:', error);
+        
+        if (retries >= maxRetries) {
+          alert('Erro ao adicionar produto ao carrinho. Tente novamente.');
+        } else {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        }
       }
-
-      // Recarregar carrinho
-      await loadCartFromSupabase();
-    } catch (error) {
-      console.error('❌ Erro ao adicionar ao carrinho:', error);
-      alert('Erro ao adicionar produto ao carrinho');
     }
   }, [user]);
 

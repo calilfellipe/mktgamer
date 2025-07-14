@@ -21,6 +21,7 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
     try {
       console.log('🔍 Carregando produtos em destaque...');
       
+      // Add error handling and retry logic
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -33,6 +34,11 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
         .limit(8);
 
       if (error) {
+        // Retry once on error
+        console.warn('⚠️ Erro na primeira tentativa, tentando novamente...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return loadFeaturedProducts();
+      }
         console.error('❌ Erro ao carregar produtos:', error);
         return;
       }

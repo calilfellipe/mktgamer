@@ -5,30 +5,73 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { useApp } from '../contexts/AppContext';
 import { ProductService } from '../services/productService';
+import { supabase } from '../lib/supabase';
 
 interface ProductsPageProps {
   onAddToCart: (product: Product) => void;
 }
 
 export function ProductsPage({ onAddToCart }: ProductsPageProps) {
-  const { searchQuery, selectedGame, selectedCategory } = useApp();
+  const { searchQuery, selectedGame, selectedCategory, setRefreshProducts } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('newest');
   const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
   const [showFilters, setShowFilters] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [games, setGames] = useState<any[]>([]);
 
   useEffect(() => {
     loadProducts();
+    loadCategoriesAndGames();
+    
+    // Set refresh function for other components to use
+    setRefreshProducts(() => loadProducts);
   }, []);
+
+  // Reload when filters change
+  useEffect(() => {
+    loadProducts();
+  }, [selectedGame, selectedCategory, searchQuery]);
 
   const loadProducts = async () => {
     try {
-      const data = await ProductService.getProducts({ status: 'active' });
+      setIsLoading(true);
+      console.log('🔍 Carregando produtos com filtros:', { selectedGame, selectedCategory, searchQuery });
+      
+      let query = supabase
+        .from('products')
+        .select(`
+          *,
+          seller:users(id, username, avatar_url, is_verified)
+        `)
+        .eq('status', 'active')
+        .order('visibility_score', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (selectedCategory) {
+        query = query.eq('category', selectedCategory);
+      }
+      
+      if (selectedGame) {
+        query = query.eq('game', selectedGame);
+      }
+      
+      if (searchQuery) {
+        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ Erro ao carregar produtos:', error);
+        return;
+      }
       
       // Convert Supabase data to Product type
-      const formattedProducts = data.map((item: any) => ({
+      const formattedProducts = data?.map((item: any) => ({
         id: item.id,
         title: item.title,
         description: item.description,
@@ -54,10 +97,45 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
       }));
       
       setProducts(formattedProducts);
+      console.log('✅ Produtos carregados:', formattedProducts.length);
     } catch (error) {
       console.error('Error loading products:', error);
     }
     setIsLoading(false);
+  };
+
+  const loadCategoriesAndGames = async () => {
+    try {
+      // Get unique categories
+      const { data: categoriesData } = await supabase
+        .from('products')
+        .select('category')
+        .eq('status', 'active');
+      
+      // Get unique games
+      const { data: gamesData } = await supabase
+        .from('products')
+        .select('game')
+        .eq('status', 'active');
+      
+      const uniqueCategories = [...new Set(categoriesData?.map(p => p.category))];
+      const uniqueGames = [...new Set(gamesData?.map(p => p.game))];
+      
+      setCategories(uniqueCategories.map(cat => ({ id: cat, name: getCategoryName(cat) })));
+      setGames(uniqueGames.map(game => ({ id: game, name: game })));
+    } catch (error) {
+      console.error('Error loading categories and games:', error);
+    }
+  };
+
+  const getCategoryName = (category: string) => {
+    const categoryMap: Record<string, string> = {
+      'account': '🎮 Contas',
+      'skin': '✨ Skins', 
+      'giftcard': '🎁 Gift Cards',
+      'service': '🚀 Serviços'
+    };
+    return categoryMap[category] || category;
   };
 
   const filteredProducts = useMemo(() => {
@@ -105,21 +183,13 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
     return filtered;
   }, [products, searchQuery, selectedGame, selectedCategory, sortBy, priceRange]);
 
-  const categories = [
-    { id: 'account', name: '🎮 Contas', icon: '🎮' },
-    { id: 'skin', name: '✨ Skins', icon: '✨' },
-    { id: 'giftcard', name: '🎁 Gift Cards', icon: '🎁' },
-    { id: 'service', name: '🚀 Serviços', icon: '🚀' }
-  ];
+  const handleCategoryFilter = (categoryId: string) => {
+    setSelectedCategory(categoryId === selectedCategory ? '' : categoryId);
+  };
 
-  const games = [
-    { id: 'Free Fire', name: 'Free Fire', icon: '🔥' },
-    { id: 'Valorant', name: 'Valorant', icon: '🎯' },
-    { id: 'Fortnite', name: 'Fortnite', icon: '🏆' },
-    { id: 'Roblox', name: 'Roblox', icon: '🎮' },
-    { id: 'CS:GO', name: 'CS:GO', icon: '💣' },
-    { id: 'League of Legends', name: 'League of Legends', icon: '⚡' }
-  ];
+  const handleGameFilter = (gameId: string) => {
+    setSelectedGame(gameId === selectedGame ? '' : gameId);
+  };
 
   if (isLoading) {
     return (
@@ -175,7 +245,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                   {categories.map(category => (
                     <button
                       key={category.id}
-                      onClick={() => {}}
+                      onClick={() => handleCategoryFilter(category.id)}
                       className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                         selectedCategory === category.id
                           ? 'bg-purple-600 text-white'
@@ -195,14 +265,14 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                   {games.map(game => (
                     <button
                       key={game.id}
-                      onClick={() => {}}
+                      onClick={() => handleGameFilter(game.id)}
                       className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                         selectedGame === game.id
                           ? 'bg-purple-600 text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800'
                       }`}
                     >
-                      {game.icon} {game.name}
+                      {game.name}
                     </button>
                   ))}
                 </div>

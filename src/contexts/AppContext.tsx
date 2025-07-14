@@ -9,6 +9,8 @@ interface AppContextType {
   setSelectedGame: (game: string) => void;
   selectedCategory: string;
   setSelectedCategory: (category: string) => void;
+  refreshProducts: () => void;
+  setRefreshProducts: (fn: () => void) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -18,6 +20,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGame, setSelectedGame] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [refreshProducts, setRefreshProducts] = useState<() => void>(() => () => {});
 
   return (
     <AppContext.Provider value={{
@@ -28,7 +31,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       selectedGame,
       setSelectedGame,
       selectedCategory,
-      setSelectedCategory
+      setSelectedCategory,
+      refreshProducts,
+      setRefreshProducts
     }}>
       {children}
     </AppContext.Provider>
