@@ -15,6 +15,7 @@ import { CreateProductForm } from './components/CreateProductForm';
 import { MyProducts } from './components/MyProducts';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { AdminDashboard } from './components/AdminDashboard';
+import { SubscriptionSuccessPage } from './pages/SubscriptionSuccessPage';
 import { useCart } from './hooks/useCart';
 import { useApp } from './contexts/AppContext';
 import { useAuth } from './contexts/AuthContext';
@@ -67,6 +68,8 @@ export function MainApp() {
         return <CreateProductForm />;
       case 'checkout':
         return <CheckoutPage onCheckout={checkout} />;
+      case 'subscription-success':
+        return <SubscriptionSuccessPage />;
       default:
         return (
           <main>

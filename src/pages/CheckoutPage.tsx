@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { StripeCheckout } from '../components/StripeCheckout';
 import { useCart } from '../hooks/useCart';
 import { useApp } from '../contexts/AppContext';
 
@@ -26,6 +27,7 @@ export function CheckoutPage({ onCheckout }: CheckoutPageProps) {
   const [showPixQR, setShowPixQR] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [showStripeCheckout, setShowStripeCheckout] = useState(false);
 
   const finalTotal = total;
 
@@ -74,6 +76,10 @@ export function CheckoutPage({ onCheckout }: CheckoutPageProps) {
             setIsCompleted(true);
           }
         }, 10000);
+      } else if (paymentMethod === 'card') {
+        // Show Stripe checkout
+        setShowStripeCheckout(true);
+        setIsProcessing(false);
       } else {
         // Simulate other payment methods
         setTimeout(async () => {
@@ -91,6 +97,68 @@ export function CheckoutPage({ onCheckout }: CheckoutPageProps) {
     }
   };
 
+  const handleStripeSuccess = async (paymentIntent: any) => {
+    console.log('Payment successful:', paymentIntent);
+    const success = await onCheckout();
+    if (success) {
+      setShowStripeCheckout(false);
+      setIsCompleted(true);
+    }
+  };
+
+  const handleStripeError = (error: string) => {
+    console.error('Stripe error:', error);
+    setShowStripeCheckout(false);
+    alert(`Erro no pagamento: ${error}`);
+  };
+
+  if (showStripeCheckout) {
+    return (
+      <div className="min-h-screen bg-black pt-20">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-8">
+            <button
+              onClick={() => setShowStripeCheckout(false)}
+              className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar</span>
+            </button>
+            
+            <h1 className="text-3xl font-bold text-white mb-8">
+              💳 Pagamento com Cartão
+            </h1>
+          </div>
+
+          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-white mb-4">Resumo do Pedido</h2>
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-gray-400">{item.product.title} x{item.quantity}</span>
+                    <span className="text-white">R$ {(item.product.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+                <hr className="border-gray-700" />
+                <div className="flex justify-between font-bold">
+                  <span className="text-white">Total:</span>
+                  <span className="text-green-400">R$ {finalTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <StripeCheckout
+              amount={finalTotal}
+              items={items}
+              onSuccess={handleStripeSuccess}
+              onError={handleStripeError}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (showPixQR && paymentMethod === 'pix') {
     return (
       <div className="min-h-screen bg-black pt-20 flex items-center justify-center">
