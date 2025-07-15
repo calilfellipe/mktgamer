@@ -14,82 +14,92 @@ export function useCart() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  // Carregar carrinho do Supabase quando usuário logar
   useEffect(() => {
+    let isMounted = true;
+    
+    const loadCartFromSupabase = async () => {
+      if (!user || hasLoaded || !isMounted) return;
+
+      try {
+        setIsLoading(true);
+        console.log('🛒 Carregando carrinho do usuário:', user.id);
+        
+        const { data, error } = await supabase
+          .from('cart_items')
+          .select(`
+            *,
+            product:products(
+              *,
+              seller:users(id, username, avatar_url, is_verified)
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error('❌ Erro ao carregar carrinho:', error);
+          setItems([]);
+        } else {
+          console.log('✅ Carrinho carregado:', data?.length || 0, 'itens');
+
+          const cartItems = data?.map(item => ({
+            id: item.id,
+            product: {
+              id: item.product.id,
+              title: item.product.title,
+              description: item.product.description,
+              price: item.product.price,
+              category: item.product.category,
+              game: item.product.game,
+              images: Array.isArray(item.product.images) ? item.product.images : [],
+              seller: {
+                id: item.product.seller?.id || '',
+                username: item.product.seller?.username || 'Vendedor',
+                email: '',
+                avatar: item.product.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+                reputation: 4.8,
+                verified: item.product.seller?.is_verified || false,
+                plan: 'pro',
+                totalSales: 0,
+                joinDate: new Date().toISOString()
+              },
+              featured: false,
+              condition: 'excellent' as const,
+              tags: [],
+              createdAt: item.product.created_at
+            },
+            quantity: item.quantity
+          })) || [];
+
+          setItems(cartItems);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('❌ Erro ao carregar carrinho:', error);
+          setItems([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasLoaded(true);
+        }
+      }
+    };
+
     if (user) {
       loadCartFromSupabase();
     } else {
       setItems([]);
+      setHasLoaded(false);
     }
-  }, [user]);
 
-  // Prevent infinite loading
-  const [hasLoadedCart, setHasLoadedCart] = useState(false);
-
-  const loadCartFromSupabase = async () => {
-    if (!user || hasLoadedCart) return;
-
-    try {
-      setIsLoading(true);
-      console.log('🛒 Carregando carrinho do usuário:', user.id);
-      
-      const { data, error } = await supabase
-        .from('cart_items')
-        .select(`
-          *,
-          product:products(
-            *,
-            seller:users(id, username, avatar_url, is_verified)
-          )
-        `)
-        .eq('user_id', user.id);
-
-      if (error) {
-        console.error('❌ Erro ao carregar carrinho:', error);
-        return;
-      }
-
-      console.log('✅ Carrinho carregado:', data?.length || 0, 'itens');
-
-      const cartItems = data?.map(item => ({
-        id: item.id,
-        product: {
-          id: item.product.id,
-          title: item.product.title,
-          description: item.product.description,
-          price: item.product.price,
-          category: item.product.category,
-          game: item.product.game,
-          images: Array.isArray(item.product.images) ? item.product.images : [],
-          seller: {
-            id: item.product.seller?.id || '',
-            username: item.product.seller?.username || 'Vendedor',
-            email: '',
-            avatar: item.product.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
-            reputation: 4.8,
-            verified: item.product.seller?.is_verified || false,
-            plan: 'pro',
-            totalSales: 0,
-            joinDate: new Date().toISOString()
-          },
-          featured: false,
-          condition: 'excellent' as const,
-          tags: [],
-          createdAt: item.product.created_at
-        },
-        quantity: item.quantity
-      })) || [];
-
-      setItems(cartItems);
-    } catch (error) {
-      console.error('❌ Erro ao carregar carrinho:', error);
-      setItems([]);
-    } finally {
-      setIsLoading(false);
-      setHasLoadedCart(true);
-    }
-  };
+    return () => {
+      isMounted = false;
+    };
+  }, [user]); // Only depend on user
 
   const addToCart = useCallback(async (product: Product) => {
     if (!user) {
@@ -97,59 +107,42 @@ export function useCart() {
       return;
     }
 
-    // Add retry logic for better reliability
-    const maxRetries = 3;
-    let retries = 0;
-    
-    while (retries < maxRetries) {
-      try {
-        console.log('➕ Adicionando produto ao carrinho:', product.title);
-        
-        // Verificar se o produto já está no carrinho
-        const { data: existingItem } = await supabase
+    try {
+      console.log('➕ Adicionando produto ao carrinho:', product.title);
+      
+      const { data: existingItem } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .single();
+
+      if (existingItem) {
+        const { error } = await supabase
           .from('cart_items')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('product_id', product.id)
-          .single();
+          .update({ quantity: existingItem.quantity + 1 })
+          .eq('id', existingItem.id);
 
-        if (existingItem) {
-          // Atualizar quantidade
-          const { error } = await supabase
-            .from('cart_items')
-            .update({ quantity: existingItem.quantity + 1 })
-            .eq('id', existingItem.id);
+        if (error) throw error;
+        console.log('✅ Quantidade atualizada no carrinho');
+      } else {
+        const { error } = await supabase
+          .from('cart_items')
+          .insert([{
+            user_id: user.id,
+            product_id: product.id,
+            quantity: 1
+          }]);
 
-          if (error) throw error;
-          console.log('✅ Quantidade atualizada no carrinho');
-        } else {
-          // Adicionar novo item
-          const { error } = await supabase
-            .from('cart_items')
-            .insert([{
-              user_id: user.id,
-              product_id: product.id,
-              quantity: 1
-            }]);
-
-          if (error) throw error;
-          console.log('✅ Produto adicionado ao carrinho');
-        }
-
-        // Recarregar carrinho
-        await loadCartFromSupabase();
-        break; // Success, exit retry loop
-      } catch (error) {
-        retries++;
-        console.error('❌ Erro ao adicionar ao carrinho:', error);
-        
-        if (retries >= maxRetries) {
-          alert('Erro ao adicionar produto ao carrinho. Tente novamente.');
-        } else {
-          // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-        }
+        if (error) throw error;
+        console.log('✅ Produto adicionado ao carrinho');
       }
+
+      // Reload cart
+      setHasLoaded(false);
+    } catch (error) {
+      console.error('❌ Erro ao adicionar ao carrinho:', error);
+      alert('Erro ao adicionar produto ao carrinho. Tente novamente.');
     }
   }, [user]);
 
@@ -167,7 +160,6 @@ export function useCart() {
 
       if (error) throw error;
 
-      // Atualizar estado local
       setItems(prev => prev.filter(item => item.product.id !== productId));
       console.log('✅ Produto removido do carrinho');
     } catch (error) {
@@ -194,7 +186,6 @@ export function useCart() {
 
       if (error) throw error;
 
-      // Atualizar estado local
       setItems(prev =>
         prev.map(item =>
           item.product.id === productId
@@ -235,7 +226,6 @@ export function useCart() {
       setIsLoading(true);
       console.log('💳 Iniciando checkout Stripe com', items.length, 'itens');
 
-      // Prepare cart items for Stripe checkout
       const cartItems = items.map(item => ({
         id: item.product.id,
         seller_id: item.product.seller.id,
@@ -248,7 +238,6 @@ export function useCart() {
         category: item.product.category
       }));
 
-      // Create Stripe checkout session
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
         method: 'POST',
         headers: {
@@ -269,18 +258,16 @@ export function useCart() {
         throw new Error(session.error);
       }
 
-      // Redirect to Stripe Checkout
       window.location.href = session.url;
-
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erro no checkout:', error);
       alert(`Erro ao processar pagamento: ${error.message}`);
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [user, items, clearCart]);
+  }, [user, items]);
 
   const toggleCart = useCallback(() => {
     setIsOpen(prev => !prev);

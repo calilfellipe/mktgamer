@@ -12,76 +12,83 @@ interface FeaturedProductsProps {
 export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadFeaturedProducts();
-  }, []);
-
-  // Prevent infinite loading loops
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const loadFeaturedProducts = async () => {
-    if (hasLoaded) return; // Prevent multiple calls
+  useEffect(() => {
+    let isMounted = true;
     
-    try {
-      console.log('🔍 Carregando produtos em destaque...');
+    const loadFeaturedProducts = async () => {
+      if (hasLoaded || !isMounted) return;
       
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          seller:users(id, username, avatar_url, is_verified)
-        `)
-        .eq('status', 'active')
-        .eq('highlighted', true)
-        .order('commission_rate', { ascending: false })
-        .order('visibility_score', { ascending: false })
-        .limit(8);
+      try {
+        console.log('🔍 Carregando produtos em destaque...');
+        
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            seller:users(id, username, avatar_url, is_verified)
+          `)
+          .eq('status', 'active')
+          .eq('highlighted', true)
+          .order('commission_rate', { ascending: false })
+          .order('visibility_score', { ascending: false })
+          .limit(8);
 
-      if (error) {
-        console.error('❌ Erro ao carregar produtos:', error);
-        setProducts([]);
-        setIsLoading(false);
-        setHasLoaded(true);
-        return;
+        if (!isMounted) return;
+
+        if (error) {
+          console.error('❌ Erro ao carregar produtos:', error);
+          setProducts([]);
+        } else {
+          console.log('✅ Produtos carregados:', data?.length || 0);
+          
+          const formattedProducts = data ? data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            price: item.price,
+            category: item.category,
+            game: item.game,
+            images: Array.isArray(item.images) ? item.images : [],
+            seller: {
+              id: item.seller?.id || '',
+              username: item.seller?.username || 'Vendedor',
+              email: '',
+              avatar: item.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+              reputation: 4.8,
+              verified: item.seller?.is_verified || false,
+              plan: 'pro',
+              totalSales: 0,
+              joinDate: new Date().toISOString()
+            },
+            featured: true,
+            condition: 'excellent' as const,
+            tags: [],
+            createdAt: item.created_at
+          })) : [];
+          
+          setProducts(formattedProducts);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('❌ Erro ao carregar produtos:', error);
+          setProducts([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasLoaded(true);
+        }
       }
+    };
 
-      console.log('✅ Produtos carregados:', data?.length || 0);
-      
-      // Only process if we have real data
-      const formattedProducts = data ? data.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        price: item.price,
-        category: item.category,
-        game: item.game,
-        images: Array.isArray(item.images) ? item.images : [],
-        seller: {
-          id: item.seller?.id || '',
-          username: item.seller?.username || 'Vendedor',
-          email: '',
-          avatar: item.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
-          reputation: 4.8,
-          verified: item.seller?.is_verified || false,
-          plan: 'pro',
-          totalSales: 0,
-          joinDate: new Date().toISOString()
-        },
-        featured: true, // All highlighted products are featured
-        condition: 'excellent' as const,
-        tags: [],
-        createdAt: item.created_at
-      })) : [];
-      
-      setProducts(formattedProducts);
-    } catch (error) {
-      console.error('❌ Erro ao carregar produtos:', error);
-      setProducts([]);
-    }
-    setIsLoading(false);
-    setHasLoaded(true);
-  };
+    loadFeaturedProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Dependências vazias - carrega apenas uma vez
 
   if (isLoading) {
     return (

@@ -4,7 +4,6 @@ import { Product } from '../types';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { useApp } from '../contexts/AppContext';
-import { ProductService } from '../services/productService';
 import { supabase } from '../lib/supabase';
 
 interface ProductsPageProps {
@@ -12,7 +11,7 @@ interface ProductsPageProps {
 }
 
 export function ProductsPage({ onAddToCart }: ProductsPageProps) {
-  const { searchQuery, selectedGame, selectedCategory, setRefreshProducts } = useApp();
+  const { searchQuery, selectedGame, selectedCategory } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('newest');
   const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
@@ -21,128 +20,107 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
   const [games, setGames] = useState<any[]>([]);
-
-  // Prevent infinite loading
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
-    if (!hasLoaded) {
-      loadProducts();
-      loadCategoriesAndGames();
-      setHasLoaded(true);
-    }
+    let isMounted = true;
     
-    // Set refresh function for other components to use
-    setRefreshProducts(() => loadProducts);
-  }, [hasLoaded]);
-
-  // Reload when filters change
-  useEffect(() => {
-    if (hasLoaded) {
-      loadProducts();
-    }
-  }, [selectedGame, selectedCategory, searchQuery]);
-
-  const loadProducts = async () => {
-    try {
-      setIsLoading(true);
-      console.log('🔍 Carregando produtos com filtros:', { selectedGame, selectedCategory, searchQuery });
+    const loadData = async () => {
+      if (hasLoaded || !isMounted) return;
       
-      let query = supabase
-        .from('products')
-        .select(`
-          *,
-          seller:users(id, username, avatar_url, is_verified)
-        `)
-        .eq('status', 'active')
-        .order('commission_rate', { ascending: false })
-        .order('visibility_score', { ascending: false })
-        .order('created_at', { ascending: false });
+      try {
+        setIsLoading(true);
+        
+        // Load products and categories in parallel
+        const [productsResult, categoriesResult, gamesResult] = await Promise.all([
+          supabase
+            .from('products')
+            .select(`
+              *,
+              seller:users(id, username, avatar_url, is_verified)
+            `)
+            .eq('status', 'active')
+            .order('commission_rate', { ascending: false })
+            .order('visibility_score', { ascending: false })
+            .order('created_at', { ascending: false }),
+          
+          supabase
+            .from('products')
+            .select('category')
+            .eq('status', 'active'),
+          
+          supabase
+            .from('products')
+            .select('game')
+            .eq('status', 'active')
+        ]);
 
-      // Apply filters
-      if (selectedCategory) {
-        query = query.eq('category', selectedCategory);
+        if (!isMounted) return;
+
+        // Process products
+        if (productsResult.error) {
+          console.error('❌ Erro ao carregar produtos:', productsResult.error);
+          setProducts([]);
+        } else {
+          const formattedProducts = productsResult.data ? productsResult.data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            price: item.price,
+            category: item.category,
+            game: item.game,
+            images: item.images,
+            seller: {
+              id: item.seller.id,
+              username: item.seller.username,
+              email: item.seller.email || '',
+              avatar: item.seller.avatar_url,
+              reputation: 4.8,
+              verified: item.seller.is_verified,
+              plan: 'pro',
+              totalSales: 0,
+              joinDate: new Date().toISOString()
+            },
+            featured: item.visibility_score > 100,
+            condition: 'excellent' as const,
+            tags: [],
+            createdAt: item.created_at
+          })) : [];
+          
+          setProducts(formattedProducts);
+        }
+
+        // Process categories
+        if (!categoriesResult.error && categoriesResult.data) {
+          const uniqueCategories = [...new Set(categoriesResult.data.map(p => p.category))];
+          setCategories(uniqueCategories.map(cat => ({ id: cat, name: getCategoryName(cat) })));
+        }
+
+        // Process games
+        if (!gamesResult.error && gamesResult.data) {
+          const uniqueGames = [...new Set(gamesResult.data.map(p => p.game))];
+          setGames(uniqueGames.map(game => ({ id: game, name: game })));
+        }
+
+      } catch (error) {
+        if (isMounted) {
+          console.error('Error loading data:', error);
+          setProducts([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          setHasLoaded(true);
+        }
       }
-      
-      if (selectedGame) {
-        query = query.eq('game', selectedGame);
-      }
-      
-      if (searchQuery) {
-        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
-      }
+    };
 
-      const { data, error } = await query;
+    loadData();
 
-      if (error) {
-        console.error('❌ Erro ao carregar produtos:', error);
-        setProducts([]);
-        setIsLoading(false);
-        return;
-      }
-      
-      // Only process real data
-      const formattedProducts = data ? data.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        price: item.price,
-        category: item.category,
-        game: item.game,
-        images: item.images,
-        seller: {
-          id: item.seller.id,
-          username: item.seller.username,
-          email: item.seller.email || '',
-          avatar: item.seller.avatar_url,
-          reputation: 4.8, // Default for demo
-          verified: item.seller.is_verified,
-          plan: 'pro',
-          totalSales: 0,
-          joinDate: new Date().toISOString()
-        },
-        featured: item.visibility_score > 100,
-        condition: 'excellent' as const,
-        tags: [],
-        createdAt: item.created_at
-      })) : [];
-      
-      setProducts(formattedProducts);
-      console.log('✅ Produtos carregados:', formattedProducts.length);
-    } catch (error) {
-      console.error('Error loading products:', error);
-    }
-    setIsLoading(false);
-  };
-
-  const loadCategoriesAndGames = async () => {
-    try {
-      // Get unique categories
-      const { data: categoriesData, error: catError } = await supabase
-        .from('products')
-        .select('category')
-        .eq('status', 'active');
-      
-      // Get unique games
-      const { data: gamesData, error: gameError } = await supabase
-        .from('products')
-        .select('game')
-        .eq('status', 'active');
-      
-      if (catError || gameError) {
-        console.error('Error loading categories/games:', catError || gameError);
-        return;
-      }
-      
-      const uniqueCategories = [...new Set(categoriesData?.map(p => p.category))];
-      const uniqueGames = [...new Set(gamesData?.map(p => p.game))];
-      
-      setCategories(uniqueCategories.map(cat => ({ id: cat, name: getCategoryName(cat) })));
-      setGames(uniqueGames.map(game => ({ id: game, name: game })));
-    } catch (error) {
-      console.error('Error loading categories and games:', error);
-    }
-  };
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Load only once
 
   const getCategoryName = (category: string) => {
     const categoryMap: Record<string, string> = {
@@ -199,14 +177,6 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
     return filtered;
   }, [products, searchQuery, selectedGame, selectedCategory, sortBy, priceRange]);
 
-  const handleCategoryFilter = (categoryId: string) => {
-    setSelectedCategory(categoryId === selectedCategory ? '' : categoryId);
-  };
-
-  const handleGameFilter = (gameId: string) => {
-    setSelectedGame(gameId === selectedGame ? '' : gameId);
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black pt-20">
@@ -261,12 +231,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                   {categories.map(category => (
                     <button
                       key={category.id}
-                      onClick={() => handleCategoryFilter(category.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        selectedCategory === category.id
-                          ? 'bg-purple-600 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                      }`}
+                      className="w-full text-left px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800"
                     >
                       {category.name}
                     </button>
@@ -281,12 +246,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                   {games.map(game => (
                     <button
                       key={game.id}
-                      onClick={() => handleGameFilter(game.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                        selectedGame === game.id
-                          ? 'bg-purple-600 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                      }`}
+                      className="w-full text-left px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800"
                     >
                       {game.name}
                     </button>
@@ -368,8 +328,8 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
             {filteredProducts.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold text-white mb-2">Nenhum produto real encontrado</h3>
-                <p className="text-gray-400">Apenas produtos reais do Supabase são exibidos</p>
+                <h3 className="text-xl font-semibold text-white mb-2">Nenhum produto encontrado</h3>
+                <p className="text-gray-400">Tente ajustar os filtros ou criar um novo anúncio</p>
               </div>
             ) : (
               <div className={viewMode === 'grid' 
