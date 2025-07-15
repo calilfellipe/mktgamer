@@ -103,7 +103,8 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
                   <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">
                     GG Sync
                   </span>
-                  <span className="text-xl font-bold text-white ml-1">Market</span>
+                  <span className="text-xl font-bold text-white ml-1">
+                </span>
                 </div>
               </div>
             </div>
