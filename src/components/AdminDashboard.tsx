@@ -207,7 +207,7 @@ export function AdminDashboard() {
         {/* Header */}
         <div className="py-8">
           <h1 className="text-3xl font-bold text-white mb-2">Painel Administrativo</h1>
-          <p className="text-gray-400">Gerencie sua plataforma Xandy Gamer Market</p>
+          <p className="text-gray-400">Gerencie sua plataforma GG Sync Market</p>
         </div>
 
         {/* Tabs */}
