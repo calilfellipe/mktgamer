@@ -91,11 +91,16 @@ export class ProductService {
     return ErrorHandler.withRetry(async () => {
       console.log('📝 Criando produto...');
       
+      // Determinar se deve ser destacado (taxa >= 20%)
+      const highlighted = productData.commission_rate >= 20;
+      
       const { data, error } = await supabase
         .from('products')
         .insert([{
           ...productData,
-          status: 'active' // Auto-aprovar por enquanto
+          status: 'active',
+          highlighted,
+          visibility_score: productData.commission_rate * 10 // Score baseado na taxa
         }])
         .select(`
           *,
@@ -138,6 +143,12 @@ export class ProductService {
   static async updateProduct(productId: string, updates: any) {
     return ErrorHandler.withRetry(async () => {
       console.log('🔄 Atualizando produto:', productId);
+      
+      // Se atualizando commission_rate, recalcular highlighted
+      if (updates.commission_rate !== undefined) {
+        updates.highlighted = updates.commission_rate >= 20;
+        updates.visibility_score = updates.commission_rate * 10;
+      }
       
       const { data, error } = await supabase
         .from('products')

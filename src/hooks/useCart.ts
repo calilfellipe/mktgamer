@@ -20,7 +20,7 @@ export function useCart() {
     let isMounted = true;
     
     const loadCartFromSupabase = async () => {
-      if (!user || hasLoaded || !isMounted) return;
+      if (!user || !isMounted) return;
 
       try {
         setIsLoading(true);
@@ -84,22 +84,16 @@ export function useCart() {
       } finally {
         if (isMounted) {
           setIsLoading(false);
-          setHasLoaded(true);
         }
       }
     };
 
-    if (user) {
-      loadCartFromSupabase();
-    } else {
-      setItems([]);
-      setHasLoaded(false);
-    }
+    loadCartFromSupabase();
 
     return () => {
       isMounted = false;
     };
-  }, [user]); // Only depend on user
+  }, [user]);
 
   const addToCart = useCallback(async (product: Product) => {
     if (!user) {
@@ -138,8 +132,49 @@ export function useCart() {
         console.log('✅ Produto adicionado ao carrinho');
       }
 
-      // Reload cart
-      setHasLoaded(false);
+      // Reload cart items
+      const { data } = await supabase
+        .from('cart_items')
+        .select(`
+          *,
+          product:products(
+            *,
+            seller:users(id, username, avatar_url, is_verified)
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (data) {
+        const cartItems = data.map(item => ({
+          id: item.id,
+          product: {
+            id: item.product.id,
+            title: item.product.title,
+            description: item.product.description,
+            price: item.product.price,
+            category: item.product.category,
+            game: item.product.game,
+            images: Array.isArray(item.product.images) ? item.product.images : [],
+            seller: {
+              id: item.product.seller?.id || '',
+              username: item.product.seller?.username || 'Vendedor',
+              email: '',
+              avatar: item.product.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+              reputation: 4.8,
+              verified: item.product.seller?.is_verified || false,
+              plan: 'pro',
+              totalSales: 0,
+              joinDate: new Date().toISOString()
+            },
+            featured: false,
+            condition: 'excellent' as const,
+            tags: [],
+            createdAt: item.product.created_at
+          },
+          quantity: item.quantity
+        }));
+        setItems(cartItems);
+      }
     } catch (error) {
       console.error('❌ Erro ao adicionar ao carrinho:', error);
       alert('Erro ao adicionar produto ao carrinho. Tente novamente.');

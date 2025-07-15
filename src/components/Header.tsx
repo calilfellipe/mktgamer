@@ -170,7 +170,13 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
                 variant="primary"
                 size="sm"
                 icon={Plus}
-                onClick={() => user ? handleNavClick('create-product') : onOpenLogin()}
+                onClick={() => {
+                  if (!user) {
+                    onOpenLogin();
+                    return;
+                  }
+                  handleNavClick('create-product');
+                }}
                 className="hidden md:flex"
               >
                 Anunciar
@@ -191,7 +197,13 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
               )}
               
               <button
-                onClick={user ? onToggleCart : onOpenLogin}
+                onClick={() => {
+                  if (!user) {
+                    onOpenLogin();
+                    return;
+                  }
+                  onToggleCart();
+                }}
                 className="relative p-2 text-gray-300 hover:text-white transition-colors"
               >
                 <ShoppingCart className="w-6 h-6" />

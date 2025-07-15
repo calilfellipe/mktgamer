@@ -38,21 +38,19 @@ export function MainApp() {
   const { currentPage } = useApp();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Controlar modal de login
-  React.useEffect(() => {
-    if (authLoading) return;
-    
+  // Função para ações que requerem login
+  const handleProtectedAction = (action: () => void) => {
     if (!user) {
       setIsLoginOpen(true);
-    } else {
-      setIsLoginOpen(false);
+      return;
     }
-  }, [user, authLoading]);
+    action();
+  };
 
   const renderPage = () => {
     switch (currentPage) {
       case 'products':
-        return <ProductsPage onAddToCart={addToCart} />;
+        return <ProductsPage onAddToCart={(product) => handleProtectedAction(() => addToCart(product))} />;
       case 'admin':
         return <AdminDashboard />;
       case 'support':
@@ -76,27 +74,14 @@ export function MainApp() {
           <main>
             <Hero />
             <GameCategories />
-            <FeaturedProducts onAddToCart={addToCart} />
+            <FeaturedProducts onAddToCart={(product) => handleProtectedAction(() => addToCart(product))} />
             <PricingPlans />
           </main>
         );
     }
   };
 
-  // Loading screen otimizado
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/25 mx-auto mb-6">
-            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">GG Sync Market</h2>
-          <p className="text-gray-400">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
+  // Não mostrar loading para home pública
 
   return (
     <div className="min-h-screen bg-black">
@@ -125,7 +110,7 @@ export function MainApp() {
       )}
 
       {/* Modal de login */}
-      {isLoginOpen && (
+      {(isLoginOpen || authLoading) && (
         <LoginModal
           isOpen={isLoginOpen}
           onClose={() => setIsLoginOpen(false)}
