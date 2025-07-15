@@ -3,7 +3,7 @@ import { Star, Shield, Eye } from 'lucide-react';
 import { Product } from '../types';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { supabase } from '../lib/supabase';
+import { ProductService } from '../services/productService';
 
 interface FeaturedProductsProps {
   onAddToCart: (product: Product) => void;
@@ -12,73 +12,53 @@ interface FeaturedProductsProps {
 export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     
     const loadFeaturedProducts = async () => {
-      if (hasLoaded || !isMounted) return;
-      
       try {
-        console.log('🔍 Carregando produtos em destaque...');
+        console.log('🌟 Carregando produtos em destaque (público)...');
         
-        const { data, error } = await supabase
-          .from('products')
-          .select(`
-            *,
-            seller:users(id, username, avatar_url, is_verified)
-          `)
-          .eq('status', 'active')
-          .eq('highlighted', true)
-          .order('commission_rate', { ascending: false })
-          .order('visibility_score', { ascending: false })
-          .limit(8);
-
+        const data = await ProductService.getFeaturedProducts(8);
+        
         if (!isMounted) return;
 
-        if (error) {
-          console.error('❌ Erro ao carregar produtos:', error);
-          setProducts([]);
-        } else {
-          console.log('✅ Produtos carregados:', data?.length || 0);
-          
-          const formattedProducts = data ? data.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            price: item.price,
-            category: item.category,
-            game: item.game,
-            images: Array.isArray(item.images) ? item.images : [],
-            seller: {
-              id: item.seller?.id || '',
-              username: item.seller?.username || 'Vendedor',
-              email: '',
-              avatar: item.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
-              reputation: 4.8,
-              verified: item.seller?.is_verified || false,
-              plan: 'pro',
-              totalSales: 0,
-              joinDate: new Date().toISOString()
-            },
-            featured: true,
-            condition: 'excellent' as const,
-            tags: [],
-            createdAt: item.created_at
-          })) : [];
-          
-          setProducts(formattedProducts);
-        }
+        const formattedProducts = data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          price: item.price,
+          category: item.category,
+          game: item.game,
+          images: Array.isArray(item.images) ? item.images : [],
+          seller: {
+            id: item.seller?.id || '',
+            username: item.seller?.username || 'Vendedor',
+            email: '',
+            avatar: item.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+            reputation: 4.8,
+            verified: item.seller?.is_verified || false,
+            plan: 'pro',
+            totalSales: 0,
+            joinDate: new Date().toISOString()
+          },
+          featured: true,
+          condition: 'excellent' as const,
+          tags: [],
+          createdAt: item.created_at
+        }));
+        
+        setProducts(formattedProducts);
+        console.log('✅ Produtos em destaque carregados:', formattedProducts.length);
       } catch (error) {
         if (isMounted) {
-          console.error('❌ Erro ao carregar produtos:', error);
+          console.error('❌ Erro ao carregar produtos em destaque:', error);
           setProducts([]);
         }
       } finally {
         if (isMounted) {
           setIsLoading(false);
-          setHasLoaded(true);
         }
       }
     };
@@ -88,7 +68,7 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
     return () => {
       isMounted = false;
     };
-  }, []); // Dependências vazias - carrega apenas uma vez
+  }, []);
 
   if (isLoading) {
     return (
@@ -124,15 +104,15 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
             Destaques do <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Dia</span>
           </h2>
           <p className="text-gray-400 text-lg">
-            Os produtos mais procurados da nossa plataforma
+            Os produtos com maior taxa de destaque da nossa plataforma
           </p>
         </div>
         
         {products.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">📦</div>
+            <div className="text-6xl mb-4">⭐</div>
             <h3 className="text-xl font-bold text-white mb-2">Nenhum produto em destaque</h3>
-            <p className="text-gray-400">Os produtos com taxa alta aparecerão aqui</p>
+            <p className="text-gray-400">Produtos com taxa 20%+ aparecerão aqui</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">

@@ -1,66 +1,31 @@
 import { supabase } from '../lib/supabase';
+import { ErrorHandler } from './errorHandler';
 
 export class ProductService {
-  static async createProduct(productData: {
-    seller_id: string;
-    title: string;
-    description: string;
-    category: 'account' | 'skin' | 'service' | 'giftcard';
-    game: string;
-    price: number;
-    images: string[];
-    rarity?: string;
-    level?: number;
-    delivery_time: number;
-    commission_rate: number;
-  }) {
-    try {
-      // Calculate visibility score based on commission rate
-      const visibility_score = Math.floor(productData.commission_rate * 10);
-
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
-          ...productData,
-          visibility_score,
-          status: 'active' // Produtos são aprovados automaticamente por enquanto
-        }])
-        .select(`
-          *,
-          seller:users(*)
-        `)
-        .single();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  static async getProducts(filters: {
+  // Buscar produtos ativos (PÚBLICO - sem autenticação)
+  static async getActiveProducts(filters: {
     category?: string;
     game?: string;
     search?: string;
     minPrice?: number;
     maxPrice?: number;
-    status?: string;
     limit?: number;
+    highlighted?: boolean;
   } = {}) {
-    try {
+    return ErrorHandler.withRetry(async () => {
+      console.log('🔍 Buscando produtos ativos (público)...');
+      
       let query = supabase
         .from('products')
         .select(`
           *,
           seller:users(id, username, avatar_url, is_verified)
         `)
-        .eq('status', filters.status || 'active')
+        .eq('status', 'active')
         .order('visibility_score', { ascending: false })
         .order('created_at', { ascending: false });
 
+      // Aplicar filtros
       if (filters.category) {
         query = query.eq('category', filters.category);
       }
@@ -81,6 +46,10 @@ export class ProductService {
         query = query.lte('price', filters.maxPrice);
       }
 
+      if (filters.highlighted) {
+        query = query.eq('highlighted', true);
+      }
+
       if (filters.limit) {
         query = query.limit(filters.limit);
       }
@@ -88,63 +57,46 @@ export class ProductService {
       const { data, error } = await query;
 
       if (error) {
-        throw new Error(error.message);
+        console.error('❌ Erro ao buscar produtos:', error);
+        throw new Error(ErrorHandler.handleSupabaseError(error));
       }
 
-      return data;
-    } catch (error) {
-      throw error;
-    }
+      console.log('✅ Produtos carregados:', data?.length || 0);
+      return data || [];
+    });
   }
 
-  static async getProductById(id: string) {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          seller:users(id, username, avatar_url, is_verified)
-        `)
-        .eq('id', id)
-        .single();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data;
-    } catch (error) {
-      throw error;
-    }
+  // Buscar produtos em destaque (PÚBLICO)
+  static async getFeaturedProducts(limit = 8) {
+    return this.getActiveProducts({
+      highlighted: true,
+      limit
+    });
   }
 
-  static async getMyProducts(sellerId: string) {
-    try {
+  // Criar produto (REQUER AUTENTICAÇÃO)
+  static async createProduct(productData: {
+    seller_id: string;
+    title: string;
+    description: string;
+    category: 'account' | 'skin' | 'service' | 'giftcard';
+    game: string;
+    price: number;
+    images: string[];
+    rarity?: string;
+    level?: number;
+    delivery_time: number;
+    commission_rate: number;
+  }) {
+    return ErrorHandler.withRetry(async () => {
+      console.log('📝 Criando produto...');
+      
       const { data, error } = await supabase
         .from('products')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  static async updateProductStatus(productId: string, status: string, adminId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .update({ 
-          status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', productId)
+        .insert([{
+          ...productData,
+          status: 'active' // Auto-aprovar por enquanto
+        }])
         .select(`
           *,
           seller:users(*)
@@ -152,52 +104,81 @@ export class ProductService {
         .single();
 
       if (error) {
-        throw new Error(error.message);
+        console.error('❌ Erro ao criar produto:', error);
+        throw new Error(ErrorHandler.handleSupabaseError(error));
       }
 
-      // Notify seller
-      await supabase
-        .from('notifications')
-        .insert([{
-          user_id: data.seller_id,
-          content: status === 'active' 
-            ? `Seu produto "${data.title}" foi aprovado!`
-            : `Seu produto "${data.title}" foi rejeitado.`,
-          type: 'system',
-          is_read: false
-        }]);
-
+      console.log('✅ Produto criado:', data.id);
       return data;
-    } catch (error) {
-      throw error;
-    }
+    });
   }
 
-  static async uploadProductImages(files: File[]) {
-    try {
-      const uploadPromises = files.map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+  // Buscar meus produtos (REQUER AUTENTICAÇÃO)
+  static async getMyProducts(sellerId: string) {
+    return ErrorHandler.withRetry(async () => {
+      console.log('📦 Buscando meus produtos...');
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('seller_id', sellerId)
+        .order('created_at', { ascending: false });
 
-        const { data, error } = await supabase.storage
-          .from('product-images')
-          .upload(fileName, file);
+      if (error) {
+        console.error('❌ Erro ao buscar meus produtos:', error);
+        throw new Error(ErrorHandler.handleSupabaseError(error));
+      }
 
-        if (error) {
-          throw new Error(error.message);
-        }
+      console.log('✅ Meus produtos carregados:', data?.length || 0);
+      return data || [];
+    });
+  }
 
-        const { data: urlData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(fileName);
+  // Atualizar produto (REQUER AUTENTICAÇÃO)
+  static async updateProduct(productId: string, updates: any) {
+    return ErrorHandler.withRetry(async () => {
+      console.log('🔄 Atualizando produto:', productId);
+      
+      const { data, error } = await supabase
+        .from('products')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', productId)
+        .select()
+        .single();
 
-        return urlData.publicUrl;
-      });
+      if (error) {
+        console.error('❌ Erro ao atualizar produto:', error);
+        throw new Error(ErrorHandler.handleSupabaseError(error));
+      }
 
-      const urls = await Promise.all(uploadPromises);
-      return urls;
-    } catch (error) {
-      throw error;
-    }
+      console.log('✅ Produto atualizado');
+      return data;
+    });
+  }
+
+  // Deletar produto (REQUER AUTENTICAÇÃO)
+  static async deleteProduct(productId: string) {
+    return ErrorHandler.withRetry(async () => {
+      console.log('🗑️ Removendo produto:', productId);
+      
+      const { error } = await supabase
+        .from('products')
+        .update({ 
+          status: 'removed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', productId);
+
+      if (error) {
+        console.error('❌ Erro ao remover produto:', error);
+        throw new Error(ErrorHandler.handleSupabaseError(error));
+      }
+
+      console.log('✅ Produto removido');
+      return true;
+    });
   }
 }

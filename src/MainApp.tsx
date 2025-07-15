@@ -22,7 +22,7 @@ import { useApp } from './contexts/AppContext';
 import { useAuth } from './contexts/AuthContext';
 
 export function MainApp() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const {
     items,
     isOpen,
@@ -40,14 +40,14 @@ export function MainApp() {
 
   // Controlar modal de login
   React.useEffect(() => {
-    if (isLoading) return;
+    if (authLoading) return;
     
     if (!user) {
       setIsLoginOpen(true);
     } else {
       setIsLoginOpen(false);
     }
-  }, [user, isLoading]);
+  }, [user, authLoading]);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -84,7 +84,7 @@ export function MainApp() {
   };
 
   // Loading screen otimizado
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -101,18 +101,16 @@ export function MainApp() {
   return (
     <div className="min-h-screen bg-black">
       {/* Header sempre visível quando logado */}
-      {user && (
-        <Header 
-          onToggleCart={toggleCart} 
-          cartItemCount={itemCount}
-          onOpenLogin={() => setIsLoginOpen(true)}
-        />
-      )}
+      <Header 
+        onToggleCart={toggleCart} 
+        cartItemCount={itemCount}
+        onOpenLogin={() => setIsLoginOpen(true)}
+      />
       
       {renderPage()}
       
       {/* Footer na home */}
-      {user && currentPage === 'home' && <Footer />}
+      {currentPage === 'home' && <Footer />}
       
       {/* Carrinho */}
       {user && (
@@ -127,10 +125,12 @@ export function MainApp() {
       )}
 
       {/* Modal de login */}
-      <LoginModal
-        isOpen={isLoginOpen}
-        onClose={() => setIsLoginOpen(false)}
-      />
+      {isLoginOpen && (
+        <LoginModal
+          isOpen={isLoginOpen}
+          onClose={() => setIsLoginOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -166,34 +166,32 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
 
             {/* Actions */}
             <div className="flex items-center space-x-4">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Plus}
+                onClick={() => user ? handleNavClick('create-product') : onOpenLogin()}
+                className="hidden md:flex"
+              >
+                Anunciar
+              </Button>
+              
               {user && (
-                <>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={Plus}
-                    onClick={() => handleNavClick('create-product')}
-                    className="hidden md:flex"
-                  >
-                    Anunciar
-                  </Button>
-                  
-                  <button 
-                    className="relative p-2 text-gray-300 hover:text-white transition-colors"
-                    onClick={() => setShowNotifications(true)}
-                  >
-                    <Bell className="w-5 h-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </button>
-                </>
+                <button 
+                  className="relative p-2 text-gray-300 hover:text-white transition-colors"
+                  onClick={() => setShowNotifications(true)}
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
               )}
               
               <button
-                onClick={onToggleCart}
+                onClick={user ? onToggleCart : onOpenLogin}
                 className="relative p-2 text-gray-300 hover:text-white transition-colors"
               >
                 <ShoppingCart className="w-6 h-6" />
@@ -292,10 +290,12 @@ export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps
       </header>
 
       {/* Notification Center */}
-      <NotificationCenter
-        isOpen={showNotifications}
-        onClose={() => setShowNotifications(false)}
-      />
+      {user && (
+        <NotificationCenter
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+        />
+      )}
     </>
   );
 }

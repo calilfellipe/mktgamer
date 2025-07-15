@@ -47,8 +47,11 @@ export function CreateProductForm() {
       <div className="min-h-screen bg-black pt-20 flex items-center justify-center">
         <div className="text-center">
           <Gamepad2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-white mb-2">Acesso Negado</h2>
-          <p className="text-gray-400">Você precisa estar logado para criar um anúncio.</p>
+          <h2 className="text-2xl font-bold text-white mb-2">Login Necessário</h2>
+          <p className="text-gray-400 mb-6">Você precisa estar logado para criar um anúncio.</p>
+          <Button variant="primary" onClick={() => window.location.reload()}>
+            Fazer Login
+          </Button>
         </div>
       </div>
     );
@@ -157,40 +160,20 @@ export function CreateProductForm() {
       console.log('🚀 Criando produto...');
       
       // Use image previews as URLs (in a real app, you'd upload to storage)
-      let imageUrls = imagePreview;
+      const data = await ProductService.createProduct({
+        seller_id: user.id,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category as any,
+        game: formData.game,
+        price: parseFloat(formData.price),
+        images: imagePreview,
+        rarity: formData.rarity || undefined,
+        level: formData.level ? parseInt(formData.level) : undefined,
+        delivery_time: parseInt(formData.delivery_time),
+        commission_rate: formData.commission_rate
+      });
 
-      // Calculate visibility score based on commission rate
-      const visibility_score = Math.floor(formData.commission_rate * 10);
-      const highlighted = formData.commission_rate >= 20; // 20%+ aparece em destaque
-
-      // Create product in Supabase
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
-          seller_id: user.id,
-          title: formData.title,
-          description: formData.description,
-          category: formData.category,
-          game: formData.game,
-          price: parseFloat(formData.price),
-          images: imageUrls,
-          rarity: formData.rarity || null,
-          level: formData.level ? parseInt(formData.level) : null,
-          delivery_time: parseInt(formData.delivery_time),
-          commission_rate: formData.commission_rate,
-          visibility_score,
-          highlighted,
-          status: 'active' // Auto-approve for now
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('❌ Erro ao criar produto:', error);
-        throw new Error(error.message);
-      }
-
-      console.log('✅ Produto criado com sucesso:', data);
       setMessage('✅ Anúncio criado com sucesso!');
       
       // Refresh products list
@@ -220,7 +203,6 @@ export function CreateProductForm() {
       }, 1500);
       
     } catch (error: any) {
-      console.error('❌ Erro ao criar produto:', error);
       setMessage(`❌ ${error.message}`);
     }
     setIsLoading(false);

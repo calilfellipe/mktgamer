@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Star, Shield, Eye, Filter, Grid, List } from 'lucide-react';
 import { Product } from '../types';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { useApp } from '../contexts/AppContext';
-import { supabase } from '../lib/supabase';
+import { ProductService } from '../services/productService';
+import { games } from '../data/mockData';
 
 interface ProductsPageProps {
   onAddToCart: (product: Product) => void;
@@ -18,164 +19,86 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [games, setGames] = useState<any[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     
-    const loadData = async () => {
-      if (hasLoaded || !isMounted) return;
-      
+    const loadProducts = async () => {
       try {
         setIsLoading(true);
+        console.log('🔍 Carregando produtos (público)...');
         
-        // Load products and categories in parallel
-        const [productsResult, categoriesResult, gamesResult] = await Promise.all([
-          supabase
-            .from('products')
-            .select(`
-              *,
-              seller:users(id, username, avatar_url, is_verified)
-            `)
-            .eq('status', 'active')
-            .order('commission_rate', { ascending: false })
-            .order('visibility_score', { ascending: false })
-            .order('created_at', { ascending: false }),
-          
-          supabase
-            .from('products')
-            .select('category')
-            .eq('status', 'active'),
-          
-          supabase
-            .from('products')
-            .select('game')
-            .eq('status', 'active')
-        ]);
+        const data = await ProductService.getActiveProducts({
+          category: selectedCategory || undefined,
+          game: selectedGame || undefined,
+          search: searchQuery || undefined,
+          minPrice: priceRange.min > 0 ? priceRange.min : undefined,
+          maxPrice: priceRange.max < 1000 ? priceRange.max : undefined
+        });
 
         if (!isMounted) return;
 
-        // Process products
-        if (productsResult.error) {
-          console.error('❌ Erro ao carregar produtos:', productsResult.error);
-          setProducts([]);
-        } else {
-          const formattedProducts = productsResult.data ? productsResult.data.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            price: item.price,
-            category: item.category,
-            game: item.game,
-            images: item.images,
-            seller: {
-              id: item.seller.id,
-              username: item.seller.username,
-              email: item.seller.email || '',
-              avatar: item.seller.avatar_url,
-              reputation: 4.8,
-              verified: item.seller.is_verified,
-              plan: 'pro',
-              totalSales: 0,
-              joinDate: new Date().toISOString()
-            },
-            featured: item.visibility_score > 100,
-            condition: 'excellent' as const,
-            tags: [],
-            createdAt: item.created_at
-          })) : [];
-          
-          setProducts(formattedProducts);
+        const formattedProducts = data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          price: item.price,
+          category: item.category,
+          game: item.game,
+          images: Array.isArray(item.images) ? item.images : [],
+          seller: {
+            id: item.seller?.id || '',
+            username: item.seller?.username || 'Vendedor',
+            email: '',
+            avatar: item.seller?.avatar_url || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+            reputation: 4.8,
+            verified: item.seller?.is_verified || false,
+            plan: 'pro',
+            totalSales: 0,
+            joinDate: new Date().toISOString()
+          },
+          featured: item.highlighted || false,
+          condition: 'excellent' as const,
+          tags: [],
+          createdAt: item.created_at
+        }));
+
+        // Aplicar ordenação local
+        let sortedProducts = [...formattedProducts];
+        switch (sortBy) {
+          case 'price-low':
+            sortedProducts.sort((a, b) => a.price - b.price);
+            break;
+          case 'price-high':
+            sortedProducts.sort((a, b) => b.price - a.price);
+            break;
+          case 'popular':
+            sortedProducts.sort((a, b) => b.seller.reputation - a.seller.reputation);
+            break;
+          default:
+            sortedProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         }
 
-        // Process categories
-        if (!categoriesResult.error && categoriesResult.data) {
-          const uniqueCategories = [...new Set(categoriesResult.data.map(p => p.category))];
-          setCategories(uniqueCategories.map(cat => ({ id: cat, name: getCategoryName(cat) })));
-        }
-
-        // Process games
-        if (!gamesResult.error && gamesResult.data) {
-          const uniqueGames = [...new Set(gamesResult.data.map(p => p.game))];
-          setGames(uniqueGames.map(game => ({ id: game, name: game })));
-        }
-
+        setProducts(sortedProducts);
+        console.log('✅ Produtos carregados:', sortedProducts.length);
       } catch (error) {
         if (isMounted) {
-          console.error('Error loading data:', error);
+          console.error('❌ Erro ao carregar produtos:', error);
           setProducts([]);
         }
       } finally {
         if (isMounted) {
           setIsLoading(false);
-          setHasLoaded(true);
         }
       }
     };
 
-    loadData();
+    loadProducts();
 
     return () => {
       isMounted = false;
     };
-  }, []); // Load only once
-
-  const getCategoryName = (category: string) => {
-    const categoryMap: Record<string, string> = {
-      'account': '🎮 Contas',
-      'skin': '✨ Skins', 
-      'giftcard': '🎁 Gift Cards',
-      'service': '🚀 Serviços'
-    };
-    return categoryMap[category] || category;
-  };
-
-  const filteredProducts = useMemo(() => {
-    let filtered = [...products];
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(product =>
-        product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.game.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Game filter
-    if (selectedGame) {
-      filtered = filtered.filter(product => product.game === selectedGame);
-    }
-
-    // Category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(product => product.category === selectedCategory);
-    }
-
-    // Price filter
-    filtered = filtered.filter(product =>
-      product.price >= priceRange.min && product.price <= priceRange.max
-    );
-
-    // Sort
-    switch (sortBy) {
-      case 'price-low':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price-high':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'popular':
-        filtered.sort((a, b) => b.seller.reputation - a.seller.reputation);
-        break;
-      default:
-        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
-    return filtered;
-  }, [products, searchQuery, selectedGame, selectedCategory, sortBy, priceRange]);
+  }, [searchQuery, selectedGame, selectedCategory, sortBy, priceRange]);
 
   if (isLoading) {
     return (
@@ -202,6 +125,13 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
     );
   }
 
+  const categories = [
+    { id: 'account', name: '🎮 Contas' },
+    { id: 'skin', name: '✨ Skins' },
+    { id: 'giftcard', name: '🎁 Gift Cards' },
+    { id: 'service', name: '🚀 Serviços' }
+  ];
+
   return (
     <div className="min-h-screen bg-black pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -211,7 +141,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
             Produtos {searchQuery && `para "${searchQuery}"`}
           </h1>
           <p className="text-gray-400">
-            {filteredProducts.length} produtos encontrados
+            {products.length} produtos encontrados
           </p>
         </div>
 
@@ -245,10 +175,10 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                 <div className="space-y-2">
                   {games.map(game => (
                     <button
-                      key={game.id}
+                      key={game.name}
                       className="w-full text-left px-3 py-2 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800"
                     >
-                      {game.name}
+                      {game.icon} {game.name}
                     </button>
                   ))}
                 </div>
@@ -325,18 +255,18 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
             </div>
 
             {/* Products */}
-            {filteredProducts.length === 0 ? (
+            {products.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
                 <h3 className="text-xl font-semibold text-white mb-2">Nenhum produto encontrado</h3>
-                <p className="text-gray-400">Tente ajustar os filtros ou criar um novo anúncio</p>
+                <p className="text-gray-400">Tente ajustar os filtros ou aguarde novos anúncios</p>
               </div>
             ) : (
               <div className={viewMode === 'grid' 
                 ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
                 : 'space-y-4'
               }>
-                {filteredProducts.map((product) => (
+                {products.map((product) => (
                   <div
                     key={product.id}
                     className={`bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-purple-500/50 transition-all duration-300 group ${
@@ -345,11 +275,15 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                   >
                     <div className={`relative ${viewMode === 'list' ? 'w-48 flex-shrink-0' : ''}`}>
                       <img
-                        src={product.images[0]}
+                        src={product.images[0] || 'https://images.pexels.com/photos/442576/pexels-photo-442576.jpeg?auto=compress&cs=tinysrgb&w=400&h=250&dpr=1'}
                         alt={product.title}
                         className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
                           viewMode === 'list' ? 'w-full h-full' : 'w-full h-48'
                         }`}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = 'https://images.pexels.com/photos/442576/pexels-photo-442576.jpeg?auto=compress&cs=tinysrgb&w=400&h=250&dpr=1';
+                        }}
                       />
                       <div className="absolute top-4 right-4">
                         <Badge variant="success">{product.condition}</Badge>
@@ -357,6 +291,11 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                       <div className="absolute bottom-4 left-4">
                         <Badge variant="primary">{product.game}</Badge>
                       </div>
+                      {product.featured && (
+                        <div className="absolute top-4 left-4">
+                          <Badge variant="warning">⭐ DESTAQUE</Badge>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="p-6 flex-1">
@@ -374,6 +313,10 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
                             src={product.seller.avatar}
                             alt={product.seller.username}
                             className="w-6 h-6 rounded-full"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1';
+                            }}
                           />
                           <span className="text-sm text-gray-400">{product.seller.username}</span>
                           {product.seller.verified && (

@@ -103,7 +103,7 @@ export function useCart() {
 
   const addToCart = useCallback(async (product: Product) => {
     if (!user) {
-      alert('Você precisa estar logado para adicionar ao carrinho');
+      console.log('⚠️ Usuário não logado - redirecionando para login');
       return;
     }
 
