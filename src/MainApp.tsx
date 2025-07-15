@@ -4,7 +4,6 @@ import { Hero } from './components/Hero';
 import { GameCategories } from './components/GameCategories';
 import { FeaturedProducts } from './components/FeaturedProducts';
 import { PricingPlans } from './components/PricingPlans';
-import { Testimonials } from './components/Testimonials';
 import { Footer } from './components/Footer';
 import { Cart } from './components/Cart';
 import { LoginModal } from './components/LoginModal';
@@ -79,7 +78,6 @@ export function MainApp() {
             <GameCategories />
             <FeaturedProducts onAddToCart={addToCart} />
             <PricingPlans />
-            <Testimonials />
           </main>
         );
     }

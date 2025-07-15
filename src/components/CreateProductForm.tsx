@@ -217,7 +217,7 @@ export function CreateProductForm() {
       // Redirect to products page to see the new listing
       setTimeout(() => {
         setCurrentPage('products');
-      }, 2000);
+      }, 1500);
       
     } catch (error: any) {
       console.error('❌ Erro ao criar produto:', error);
@@ -660,7 +660,7 @@ export function CreateProductForm() {
                 <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-6">
                   <h3 className="text-green-300 font-bold mb-2">✅ Tudo pronto!</h3>
                   <p className="text-green-400/70">
-                    Seu anúncio será publicado imediatamente e ficará visível para milhares de compradores.
+                    Seu anúncio será publicado imediatamente com dados reais no Supabase.
                   </p>
                 </div>
               </div>

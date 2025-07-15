@@ -22,17 +22,25 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [games, setGames] = useState<any[]>([]);
 
+  // Prevent infinite loading
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   useEffect(() => {
-    loadProducts();
-    loadCategoriesAndGames();
+    if (!hasLoaded) {
+      loadProducts();
+      loadCategoriesAndGames();
+      setHasLoaded(true);
+    }
     
     // Set refresh function for other components to use
     setRefreshProducts(() => loadProducts);
-  }, []);
+  }, [hasLoaded]);
 
   // Reload when filters change
   useEffect(() => {
-    loadProducts();
+    if (hasLoaded) {
+      loadProducts();
+    }
   }, [selectedGame, selectedCategory, searchQuery]);
 
   const loadProducts = async () => {
@@ -68,11 +76,13 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
 
       if (error) {
         console.error('❌ Erro ao carregar produtos:', error);
+        setProducts([]);
+        setIsLoading(false);
         return;
       }
       
-      // Convert Supabase data to Product type
-      const formattedProducts = data?.map((item: any) => ({
+      // Only process real data
+      const formattedProducts = data ? data.map((item: any) => ({
         id: item.id,
         title: item.title,
         description: item.description,
@@ -95,7 +105,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
         condition: 'excellent' as const,
         tags: [],
         createdAt: item.created_at
-      }));
+      })) : [];
       
       setProducts(formattedProducts);
       console.log('✅ Produtos carregados:', formattedProducts.length);
@@ -108,16 +118,21 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
   const loadCategoriesAndGames = async () => {
     try {
       // Get unique categories
-      const { data: categoriesData } = await supabase
+      const { data: categoriesData, error: catError } = await supabase
         .from('products')
         .select('category')
         .eq('status', 'active');
       
       // Get unique games
-      const { data: gamesData } = await supabase
+      const { data: gamesData, error: gameError } = await supabase
         .from('products')
         .select('game')
         .eq('status', 'active');
+      
+      if (catError || gameError) {
+        console.error('Error loading categories/games:', catError || gameError);
+        return;
+      }
       
       const uniqueCategories = [...new Set(categoriesData?.map(p => p.category))];
       const uniqueGames = [...new Set(gamesData?.map(p => p.game))];
@@ -353,8 +368,8 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
             {filteredProducts.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-xl font-semibold text-white mb-2">Nenhum produto encontrado</h3>
-                <p className="text-gray-400">Tente ajustar os filtros ou buscar por outros termos</p>
+                <h3 className="text-xl font-semibold text-white mb-2">Nenhum produto real encontrado</h3>
+                <p className="text-gray-400">Apenas produtos reais do Supabase são exibidos</p>
               </div>
             ) : (
               <div className={viewMode === 'grid' 

@@ -24,8 +24,11 @@ export function useCart() {
     }
   }, [user]);
 
+  // Prevent infinite loading
+  const [hasLoadedCart, setHasLoadedCart] = useState(false);
+
   const loadCartFromSupabase = async () => {
-    if (!user) return;
+    if (!user || hasLoadedCart) return;
 
     try {
       setIsLoading(true);
@@ -81,8 +84,10 @@ export function useCart() {
       setItems(cartItems);
     } catch (error) {
       console.error('❌ Erro ao carregar carrinho:', error);
+      setItems([]);
     } finally {
       setIsLoading(false);
+      setHasLoadedCart(true);
     }
   };
 

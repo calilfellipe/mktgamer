@@ -17,11 +17,15 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
     loadFeaturedProducts();
   }, []);
 
+  // Prevent infinite loading loops
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   const loadFeaturedProducts = async () => {
+    if (hasLoaded) return; // Prevent multiple calls
+    
     try {
       console.log('🔍 Carregando produtos em destaque...');
       
-      // Add error handling and retry logic
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -35,16 +39,17 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
         .limit(8);
 
       if (error) {
-        // Retry once on error
-        console.warn('⚠️ Erro na primeira tentativa, tentando novamente...', error);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return loadFeaturedProducts();
+        console.error('❌ Erro ao carregar produtos:', error);
+        setProducts([]);
+        setIsLoading(false);
+        setHasLoaded(true);
+        return;
       }
 
       console.log('✅ Produtos carregados:', data?.length || 0);
       
-      // Convert Supabase data to Product type
-      const formattedProducts = data?.map((item: any) => ({
+      // Only process if we have real data
+      const formattedProducts = data ? data.map((item: any) => ({
         id: item.id,
         title: item.title,
         description: item.description,
@@ -63,17 +68,19 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
           totalSales: 0,
           joinDate: new Date().toISOString()
         },
-        featured: item.visibility_score > 50,
+        featured: true, // All highlighted products are featured
         condition: 'excellent' as const,
         tags: [],
         createdAt: item.created_at
-      })) || [];
+      })) : [];
       
       setProducts(formattedProducts);
     } catch (error) {
       console.error('❌ Erro ao carregar produtos:', error);
+      setProducts([]);
     }
     setIsLoading(false);
+    setHasLoaded(true);
   };
 
   if (isLoading) {
@@ -117,11 +124,8 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
         {products.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">📦</div>
-            <h3 className="text-xl font-bold text-white mb-2">Nenhum produto encontrado</h3>
-            <p className="text-gray-400 mb-6">Seja o primeiro a criar um anúncio!</p>
-            <Button variant="primary" onClick={() => window.location.href = '/create-product'}>
-              Criar Primeiro Anúncio
-            </Button>
+            <h3 className="text-xl font-bold text-white mb-2">Nenhum produto em destaque</h3>
+            <p className="text-gray-400">Os produtos com taxa alta aparecerão aqui</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
