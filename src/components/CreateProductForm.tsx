@@ -139,7 +139,8 @@ export function CreateProductForm() {
   };
 
   const getCommissionBenefits = (rate: number) => {
-    if (rate >= 20) return { level: 'Ultra Destaque', icon: '🌟', color: 'text-yellow-400' };
+    if (rate >= 25) return { level: 'Ultra Destaque', icon: '🌟', color: 'text-yellow-400' };
+    if (rate >= 20) return { level: 'Premium Destaque', icon: '🏆', color: 'text-yellow-400' };
     if (rate >= 15) return { level: 'Super Destaque', icon: '⭐', color: 'text-purple-400' };
     if (rate >= 10) return { level: 'Destaque', icon: '✨', color: 'text-blue-400' };
     return { level: 'Padrão', icon: '🥉', color: 'text-gray-400' };
@@ -160,6 +161,7 @@ export function CreateProductForm() {
 
       // Calculate visibility score based on commission rate
       const visibility_score = Math.floor(formData.commission_rate * 10);
+      const highlighted = formData.commission_rate >= 20; // 20%+ aparece em destaque
 
       // Create product in Supabase
       const { data, error } = await supabase
@@ -177,6 +179,7 @@ export function CreateProductForm() {
           delivery_time: parseInt(formData.delivery_time),
           commission_rate: formData.commission_rate,
           visibility_score,
+          highlighted,
           status: 'active' // Auto-approve for now
         }])
         .select()
@@ -494,14 +497,14 @@ export function CreateProductForm() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-4">
-                    Taxa de Comissão: {formData.commission_rate}%
+                    Taxa de Comissão e Destaque: {formData.commission_rate}%
                   </label>
                   
                   <div className="space-y-4">
                     <input
                       type="range"
                       min="5"
-                      max="20"
+                      max="25"
                       value={formData.commission_rate}
                       onChange={(e) => setFormData(prev => ({ ...prev, commission_rate: parseInt(e.target.value) }))}
                       className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
@@ -511,7 +514,8 @@ export function CreateProductForm() {
                       <span>5% - Básico</span>
                       <span>10% - Padrão</span>
                       <span>15% - Destaque</span>
-                      <span>20% - Ultra</span>
+                      <span>20% - Premium</span>
+                      <span>25% - Ultra Destaque</span>
                     </div>
                   </div>
 
@@ -524,15 +528,28 @@ export function CreateProductForm() {
                     </div>
                     
                     <div className="space-y-2 text-sm">
-                      {formData.commission_rate >= 20 && (
+                      {formData.commission_rate >= 25 && (
                         <>
                           <div className="flex items-center space-x-2 text-yellow-400">
                             <Zap className="w-4 h-4" />
-                            <span>Sempre no topo dos resultados</span>
+                            <span>🌟 ULTRA DESTAQUE - Sempre no topo absoluto</span>
                           </div>
                           <div className="flex items-center space-x-2 text-yellow-400">
                             <Star className="w-4 h-4" />
-                            <span>Selo "Ultra Destaque"</span>
+                            <span>Aparece em "Destaques do Dia"</span>
+                          </div>
+                        </>
+                      )}
+                      
+                      {formData.commission_rate >= 20 && formData.commission_rate < 25 && (
+                        <>
+                          <div className="flex items-center space-x-2 text-yellow-400">
+                            <Zap className="w-4 h-4" />
+                            <span>🏆 PREMIUM - Topo dos resultados</span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-yellow-400">
+                            <Star className="w-4 h-4" />
+                            <span>Aparece em "Destaques do Dia"</span>
                           </div>
                         </>
                       )}
@@ -540,14 +557,21 @@ export function CreateProductForm() {
                       {formData.commission_rate >= 15 && (
                         <div className="flex items-center space-x-2 text-purple-400">
                           <TrendingUp className="w-4 h-4" />
-                          <span>+200% de visibilidade</span>
+                          <span>✨ DESTAQUE - +200% de visibilidade</span>
                         </div>
                       )}
                       
                       {formData.commission_rate >= 10 && (
                         <div className="flex items-center space-x-2 text-blue-400">
                           <Award className="w-4 h-4" />
-                          <span>Aparece em "Destaques"</span>
+                          <span>📈 PADRÃO - Boa visibilidade</span>
+                        </div>
+                      )}
+                      
+                      {formData.commission_rate < 10 && (
+                        <div className="flex items-center space-x-2 text-gray-400">
+                          <Award className="w-4 h-4" />
+                          <span>🥉 BÁSICO - Visibilidade padrão</span>
                         </div>
                       )}
                     </div>

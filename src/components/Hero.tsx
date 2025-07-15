@@ -105,8 +105,8 @@ export function Hero() {
               <span>Suporte 24/7</span>
             </div>
             <div className="flex items-center space-x-2 bg-gray-900/50 px-4 py-2 rounded-full border border-gray-800">
-              <Star className="w-4 h-4 text-purple-400" />
-              <span>Garantia Total</span>
+              <Star className="w-4 h-4 text-yellow-400" />
+              <span>Taxa Flexível</span>
             </div>
           </div>
         </div>

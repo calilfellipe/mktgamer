@@ -1,41 +1,8 @@
-// This file now serves as type definitions and will be replaced by Supabase data
+// This file now only contains type definitions - all mock data removed
 import { Product, User, Plan } from '../types';
 
 // These are now just for TypeScript types - actual data comes from Supabase
-export const plans: Plan[] = [
-  {
-    id: 'free',
-    name: 'Grátis',
-    price: 0,
-    features: ['5 anúncios ativos', 'Taxa de 15%', 'Suporte básico'],
-    badge: 'Starter',
-    color: 'gray'
-  },
-  {
-    id: 'gamer',
-    name: 'Gamer',
-    price: 29,
-    features: ['+50% visibilidade', 'Taxa de 10%', 'Suporte prioritário', 'Selo Premium'],
-    badge: 'Popular',
-    color: 'purple'
-  },
-  {
-    id: 'pro',
-    name: 'Pro Player',
-    price: 59,
-    features: ['Anúncios em destaque', 'Taxa de 5%', 'Relatórios avançados', 'Selo Pro'],
-    badge: 'Recomendado',
-    color: 'cyan'
-  },
-  {
-    id: 'elite',
-    name: 'Elite',
-    price: 99,
-    features: ['Sempre no topo', 'Taxa zero', 'Selo Top Seller', 'Cashback'],
-    badge: 'Premium',
-    color: 'green'
-  }
-];
+export const plans: Plan[] = [];
 
 export const games = [
   { name: 'Free Fire', icon: '🔥', color: 'from-orange-500 to-red-500' },
@@ -45,7 +12,11 @@ export const games = [
   { name: 'CS:GO', icon: '💎', color: 'from-yellow-500 to-orange-500' },
   { name: 'League of Legends', icon: '⚡', color: 'from-purple-500 to-indigo-500' },
   { name: 'Minecraft', icon: '🧱', color: 'from-green-600 to-lime-500' },
-  { name: 'Apex Legends', icon: '🎪', color: 'from-orange-600 to-red-600' }
+  { name: 'Apex Legends', icon: '🎪', color: 'from-orange-600 to-red-600' },
+  { name: 'Call of Duty', icon: '🔫', color: 'from-gray-600 to-gray-800' },
+  { name: 'FIFA', icon: '⚽', color: 'from-green-400 to-blue-500' },
+  { name: 'GTA V', icon: '🚗', color: 'from-yellow-400 to-orange-500' },
+  { name: 'Among Us', icon: '👾', color: 'from-red-400 to-pink-500' }
 ];
 
 // Mock data is now replaced by Supabase - these are just for reference

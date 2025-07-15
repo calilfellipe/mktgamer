@@ -29,8 +29,9 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
           seller:users(id, username, avatar_url, is_verified)
         `)
         .eq('status', 'active')
+        .eq('highlighted', true)
+        .order('commission_rate', { ascending: false })
         .order('visibility_score', { ascending: false })
-        .order('created_at', { ascending: false })
         .limit(8);
 
       if (error) {
@@ -127,9 +128,14 @@ export function FeaturedProducts({ onAddToCart }: FeaturedProductsProps) {
             {products.map((product) => (
               <div
                 key={product.id}
-                className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800 hover:border-purple-500/50 transition-all duration-300 group"
+                className="bg-gray-900 rounded-xl overflow-hidden border border-yellow-500/50 hover:border-yellow-400 transition-all duration-300 group shadow-lg shadow-yellow-500/20"
               >
                 <div className="relative">
+                  <div className="absolute top-2 left-2 z-10">
+                    <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black px-2 py-1 rounded-full text-xs font-bold flex items-center">
+                      ⭐ DESTAQUE
+                    </div>
+                  </div>
                   <img
                     src={product.images[0] || 'https://images.pexels.com/photos/442576/pexels-photo-442576.jpeg?auto=compress&cs=tinysrgb&w=400&h=250&dpr=1'}
                     alt={product.title}

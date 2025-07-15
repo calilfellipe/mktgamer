@@ -47,6 +47,7 @@ export function ProductsPage({ onAddToCart }: ProductsPageProps) {
           seller:users(id, username, avatar_url, is_verified)
         `)
         .eq('status', 'active')
+        .order('commission_rate', { ascending: false })
         .order('visibility_score', { ascending: false })
         .order('created_at', { ascending: false });
 
