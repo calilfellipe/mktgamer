@@ -233,8 +233,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
             {isLogin && (
               <div className="mt-4 p-3 bg-gray-800 rounded-lg">
                 <p className="text-xs text-gray-400 mb-2">Contas de demonstração:</p>
-                <p className="text-xs text-gray-300 mb-1">Admin: califellipee@outlook.com / calil112233</p>
-                <p className="text-xs text-gray-300">Demo: demo@example.com / demo123</p>
+                <p className="text-xs text-gray-300 mb-1">Admin: admin@gamemarket.com / admin123</p>
+                <p className="text-xs text-gray-300">Demo: gamer@example.com / password123</p>
               </div>
             )}
           </div>
