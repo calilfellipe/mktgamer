@@ -29,20 +29,43 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Não bloquear a UI inicialmente
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadUserProfile(session.user);
-      } else {
-        setIsLoading(false);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!isMounted) return;
+        
+        if (error) {
+          console.error('❌ Erro ao obter sessão:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (session?.user) {
+          await loadUserProfile(session.user);
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('❌ Erro na inicialização:', error);
+          setIsLoading(false);
+        }
       }
-    });
+    };
+    
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
@@ -51,12 +74,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (authUser: User) => {
+    if (!authUser?.id) return;
+    
     try {
       console.log('📥 Carregando perfil do usuário:', authUser.id);
+      setIsLoading(true);
       
       const { data, error } = await supabase
         .from('users')
@@ -89,12 +118,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (error) {
       console.error('❌ Erro ao carregar perfil:', error);
+      setUser(null);
     }
     setIsLoading(false);
   };
 
   const createUserProfile = async (authUser: User) => {
     try {
+      setIsLoading(true);
+      
       const username = authUser.user_metadata?.username || 
                       authUser.email?.split('@')[0] || 
                       'user' + Math.random().toString(36).substr(2, 9);
@@ -132,12 +164,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (error) {
       console.error('❌ Erro ao criar perfil:', error);
+      setUser(null);
       throw error;
     }
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      setIsLoading(true);
+      
       console.log('🔐 Fazendo login...');
       
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -147,23 +182,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('❌ Erro no login:', error);
+        setIsLoading(false);
         return false;
       }
 
       console.log('✅ Login bem-sucedido');
+      // setIsLoading será definido como false em loadUserProfile
       return true;
     } catch (error) {
       console.error('❌ Erro no login:', error);
+      setIsLoading(false);
       return false;
     }
   };
 
   const logout = async () => {
     try {
+      setIsLoading(true);
+      
       await supabase.auth.signOut();
       console.log('✅ Logout realizado');
     } catch (error) {
       console.error('❌ Erro no logout:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -173,6 +215,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string;
   }): Promise<boolean> => {
     try {
+      setIsLoading(true);
+      
       console.log('📝 Registrando usuário...');
       
       const { data, error } = await supabase.auth.signUp({
@@ -187,13 +231,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('❌ Erro no registro:', error);
+        setIsLoading(false);
         return false;
       }
 
       console.log('✅ Registro bem-sucedido');
+      // setIsLoading será definido como false em loadUserProfile
       return true;
     } catch (error) {
       console.error('❌ Erro no registro:', error);
+      setIsLoading(false);
       return false;
     }
   };

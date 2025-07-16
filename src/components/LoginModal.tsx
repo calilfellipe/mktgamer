@@ -20,7 +20,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login, register } = useAuth();
+  const { login, register, isLoading: authLoading } = useAuth();
 
   if (!isOpen) return null;
 
@@ -41,8 +41,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
         const success = await login(formData.email, formData.password);
         if (success) {
           console.log('✅ Login realizado com sucesso!');
-          onClose();
           setFormData({ email: '', password: '', username: '', confirmPassword: '' });
+          onClose();
         } else {
           setError('❌ Email ou senha incorretos');
         }
@@ -68,8 +68,8 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
         
         if (success) {
           console.log('✅ Registro realizado com sucesso!');
-          onClose();
           setFormData({ email: '', password: '', username: '', confirmPassword: '' });
+          onClose();
         } else {
           setError('❌ Erro ao criar conta');
         }
@@ -79,7 +79,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
       setError(err.message || 'Erro interno. Tente novamente.');
     }
     
-    setIsLoading(false);
+    // setIsLoading será controlado pelo AuthContext
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,9 +208,9 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
               type="submit"
               variant="primary"
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || authLoading}
             >
-              {isLoading ? 'Carregando...' : (isLogin ? 'Entrar' : 'Criar Conta')}
+              {(isLoading || authLoading) ? 'Carregando...' : (isLogin ? 'Entrar' : 'Criar Conta')}
             </Button>
           </form>
 

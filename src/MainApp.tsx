@@ -22,7 +22,7 @@ import { useApp } from './contexts/AppContext';
 import { useAuth } from './contexts/AuthContext';
 
 export function MainApp() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const {
     items,
     isOpen,
@@ -81,7 +81,7 @@ export function MainApp() {
     }
   };
 
-  // Não mostrar loading para home pública
+  // A home é sempre acessível, mesmo sem login
 
   return (
     <div className="min-h-screen bg-black">
@@ -110,7 +110,7 @@ export function MainApp() {
       )}
 
       {/* Modal de login */}
-      {(isLoginOpen || authLoading) && (
+      {isLoginOpen && (
         <LoginModal
           isOpen={isLoginOpen}
           onClose={() => setIsLoginOpen(false)}
