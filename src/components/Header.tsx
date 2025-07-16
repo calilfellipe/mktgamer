@@ -29,7 +29,7 @@ interface HeaderProps {
 
 export function Header({ onToggleCart, cartItemCount, onOpenLogin }: HeaderProps) {
   const { user, logout } = useAuth();
-  const { setCurrentPage, setSearchQuery, searchQuery } = useApp();
+  const { setCurrentPage, setSearchQuery, searchQuery, setSelectedCategory } = useApp();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
